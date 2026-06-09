@@ -226,15 +226,15 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 - Create: `web/src/api.ts`, `web/src/auth.tsx`, `web/src/pages/Login.tsx`, `web/src/pages/Today.tsx` (placeholder), `web/src/pages/Inbox.tsx`, `web/src/pages/Stats.tsx`, `web/src/pages/Profile.tsx`, `web/src/Layout.tsx`; rewrite `web/src/App.tsx`, `web/src/index.css`
 - Modify: `server/src/app.ts` (serve `web/dist` static + SPA fallback when it exists)
 
-- [ ] **Step 1: API client** — `api.ts`: `apiFetch(path, opts)` → `fetch('/api'+path, { credentials: 'include', headers: {'Content-Type':'application/json'}, ...opts })`; throws `ApiError {code,message,status}` parsed from the error envelope; on 401 set `location.hash = '#/login'`. Use hash routing (`createHashRouter`) so static serving needs no server config.
+- [x] **Step 1: API client** — `api.ts`: `apiFetch(path, opts)` → `fetch('/api'+path, { credentials: 'include', headers: {'Content-Type':'application/json'}, ...opts })`; throws `ApiError {code,message,status}` parsed from the error envelope; on 401 set `location.hash = '#/login'`. Use hash routing (`createHashRouter`) so static serving needs no server config.
 
-- [ ] **Step 2: Auth + layout** — `auth.tsx`: React Query `useMe()` (`GET /auth/me`), `<RequireAuth>` redirects to `/login`. `Layout.tsx`: mobile-first column, content area + fixed bottom tab bar with 4 NavLinks (Today ✅ / Dump 🧠 / Stats 📊 / Profile 👤 — yes, the tab is called **Dump**), active tab highlighted purple `#5e35b1`. `index.css`: system font stack, `max-width: 480px` centered shell, light gray `#fafafa` background — matches approved mockup styling.
+- [x] **Step 2: Auth + layout** — `auth.tsx`: React Query `useMe()` (`GET /auth/me`), `<RequireAuth>` redirects to `/login`. `Layout.tsx`: mobile-first column, content area + fixed bottom tab bar with 4 NavLinks (Today ✅ / Dump 🧠 / Stats 📊 / Profile 👤 — yes, the tab is called **Dump**), active tab highlighted purple `#5e35b1`. `index.css`: system font stack, `max-width: 480px` centered shell, light gray `#fafafa` background — matches approved mockup styling.
 
-- [ ] **Step 3: Login page** — name + password inputs, "remember me" checkbox, error message on 401. On success invalidate `me` query and navigate to `/`.
+- [x] **Step 3: Login page** — name + password inputs, "remember me" checkbox, error message on 401. On success invalidate `me` query and navigate to `/`.
 
-- [ ] **Step 4: Static serving** — in `app.ts`, if `web/dist` exists: `express.static` + non-`/api` fallback to `index.html`.
+- [x] **Step 4: Static serving** — in `app.ts`, if `web/dist` exists: `express.static` + non-`/api` fallback to `index.html`.
 
-- [ ] **Step 5: Verify + manual check + commit** — `npm run verify`; `npm run dev`, open `http://localhost:5173`, log in as `huy`, see empty tabs. Commit: `feat(web): app shell with login and tab navigation`
+- [x] **Step 5: Verify + manual check + commit** — `npm run verify`; `npm run dev`, open `http://localhost:5173`, log in as `huy`, see empty tabs. Commit: `feat(web): app shell with login and tab navigation`
 
 **Slice 0 demo:** log in from a phone-sized viewport, navigate 4 tabs.
 
