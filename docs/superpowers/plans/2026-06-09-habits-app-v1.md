@@ -80,7 +80,7 @@ Level math: `level = floor(xpTotal / 1000) + 1`; progress to next = `xpTotal % 1
 **Files:**
 - Create: `package.json`, `server/package.json`, `web/` (vite scaffold), `server/tsconfig.json`, `docker-compose.yml`, `.env.example`, `server/vitest.config.ts`
 
-- [ ] **Step 1: Root workspace**
+- [x] **Step 1: Root workspace**
 
 ```json
 // package.json (root)
@@ -95,7 +95,7 @@ Level math: `level = floor(xpTotal / 1000) + 1`; progress to next = `xpTotal % 1
 }
 ```
 
-- [ ] **Step 2: Server package**
+- [x] **Step 2: Server package**
 
 ```json
 // server/package.json
@@ -118,9 +118,9 @@ Install: `npm i -w server express cookie-parser bcryptjs jsonwebtoken zod drizzl
 
 `server/tsconfig.json`: `"module": "NodeNext"`, `"moduleResolution": "NodeNext"`, `"target": "ES2022"`, `"strict": true`, `"outDir": "dist"`. `tsconfig.build.json` extends it excluding `test/`.
 
-- [ ] **Step 3: Web package** — `npm create vite@latest web -- --template react-ts`, then `npm i -w web react-router-dom @tanstack/react-query`. Add `"typecheck": "tsc --noEmit"` script. Vite dev proxy: `server: { proxy: { '/api': 'http://localhost:3001' } }` in `vite.config.ts`.
+- [x] **Step 3: Web package** — `npm create vite@latest web -- --template react-ts`, then `npm i -w web react-router-dom @tanstack/react-query`. Add `"typecheck": "tsc --noEmit"` script. Vite dev proxy: `server: { proxy: { '/api': 'http://localhost:3001' } }` in `vite.config.ts`.
 
-- [ ] **Step 4: docker-compose + env**
+- [x] **Step 4: docker-compose + env**
 
 ```yaml
 # docker-compose.yml
@@ -139,7 +139,7 @@ volumes:
 
 `.env.example`: `DATABASE_URL=postgres://habits:habits@localhost:5433/habits`, `JWT_SECRET=change-me`, `PORT=3001`. Copy to `server/.env` (gitignored).
 
-- [ ] **Step 5: Verify + commit** — `docker compose up -d postgres`, `npm run verify` passes (no tests yet is OK — vitest needs `passWithNoTests: true` in `server/vitest.config.ts`). Commit: `chore: scaffold monorepo, postgres compose, toolchain`
+- [x] **Step 5: Verify + commit** — `docker compose up -d postgres`, `npm run verify` passes (no tests yet is OK — vitest needs `passWithNoTests: true` in `server/vitest.config.ts`). Commit: `chore: scaffold monorepo, postgres compose, toolchain`
 
 ### Task 1: Drizzle schema (users) + migrate + seed
 
