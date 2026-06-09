@@ -349,8 +349,8 @@ test('isoWeekOf returns ISO year-week', () => {
 - Create: `server/src/categories/routes.ts`; Modify: `server/src/app.ts`
 - Test: `server/test/categories.test.ts`
 
-- [ ] **Step 1: Failing tests** — `GET /api/categories` returns 3 builtins (`builtin:true`) + own customs; `POST /api/categories {name,emoji,color}` creates user-owned; other users don't see it.
-- [ ] **Step 2: Implement + green + commit** — `feat(server): categories listing and custom categories`
+- [x] **Step 1: Failing tests** — `GET /api/categories` returns 3 builtins (`builtin:true`) + own customs; `POST /api/categories {name,emoji,color}` creates user-owned; other users don't see it.
+- [x] **Step 2: Implement + green + commit** — `feat(server): categories listing and custom categories`
 
 ### Task 9: Today page UI (approved hybrid mockup)
 

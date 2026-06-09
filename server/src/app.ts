@@ -5,6 +5,7 @@ import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
 import { authRouter } from './auth/routes.js';
+import { categoriesRouter } from './categories/routes.js';
 import { habitsRouter } from './habits/routes.js';
 import { HttpError } from './errors.js';
 
@@ -23,6 +24,7 @@ export function createApp() {
 
   app.use('/api/auth', authRouter);
   app.use('/api/habits', habitsRouter);
+  app.use('/api/categories', categoriesRouter);
 
   // Mount all /api routers above this JSON 404 catch-all.
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'not_found', 'Not found')));
