@@ -438,7 +438,7 @@ test('dayStreak', () => {
 - Create: `server/src/game/achievements.ts`; Test: `server/test/achievements.test.ts`
 - Modify: `server/src/db/schema.ts` (+`achievements`, `userAchievements` tables), `server/src/db/seed.ts`
 
-- [ ] **Step 1: Schema + seed** — tables per spec; seed the catalog:
+- [x] **Step 1: Schema + seed** — tables per spec; seed the catalog:
 
 ```
 first-checkin 🎉 / checkins-100 💯 / checkins-1000 🏔
@@ -449,7 +449,7 @@ first-conversion 💡 / conversions-5 📚 / conversions-25 🧪
 balanced-day ⚖️ (check-ins in 3+ categories on one day)
 ```
 
-- [ ] **Step 2: Failing tests for pure checker**
+- [x] **Step 2: Failing tests for pure checker**
 
 ```ts
 // checkAchievements(ctx) → string[] of newly unlocked ids
@@ -465,7 +465,7 @@ test('awards thresholds crossed and skips already-unlocked', () => {
 });
 ```
 
-- [ ] **Step 3: Implement (data-driven threshold table) + green + commit** — `feat(server): achievements catalog and checker`
+- [x] **Step 3: Implement (data-driven threshold table) + green + commit** — `feat(server): achievements catalog and checker`
 
 ### Task 13: Wire gamification into the check-in transaction
 

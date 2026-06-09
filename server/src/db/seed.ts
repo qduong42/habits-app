@@ -1,7 +1,8 @@
 import bcrypt from 'bcryptjs';
 import { and, eq, isNull } from 'drizzle-orm';
 import { db, pool } from './client.js';
-import { categories, users } from './schema.js';
+import { achievements, categories, users } from './schema.js';
+import { ACHIEVEMENT_CATALOG } from '../game/achievements.js';
 
 const password = process.env.SEED_PASSWORD ?? 'changeme123';
 const passwordHash = await bcrypt.hash(password, 10);
@@ -35,4 +36,19 @@ for (const preset of builtinCategories) {
 }
 
 console.log('seeded builtin categories: Fitness, Mental Health, Sleep');
+
+// Achievement catalog (text PK = slug, so onConflictDoNothing is idempotent).
+await db
+  .insert(achievements)
+  .values(
+    ACHIEVEMENT_CATALOG.map(({ id, name, description, emoji }) => ({
+      id,
+      name,
+      description,
+      emoji,
+    })),
+  )
+  .onConflictDoNothing();
+
+console.log(`seeded achievements catalog: ${ACHIEVEMENT_CATALOG.length}`);
 await pool.end();

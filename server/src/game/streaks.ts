@@ -36,6 +36,7 @@ export function weeklyStreak(
   target: number,
   currentWeek: string,
 ): number {
+  if (target <= 0) return 0; // met() would never be false → unbounded walk backwards
   const met = (week: string) => (counts.get(week) ?? 0) >= target;
   let week = met(currentWeek) ? currentWeek : prevIsoWeek(currentWeek);
   let streak = 0;

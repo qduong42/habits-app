@@ -15,6 +15,13 @@
       "when": 1781043099559,
       "tag": "0001_mixed_phantom_reporter",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781046916418,
+      "tag": "0002_hesitant_warhawk",
+      "breakpoints": true
     }
   ]
 }

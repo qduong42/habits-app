@@ -94,6 +94,13 @@ test('weeklyStreak with no qualifying weeks is 0', () => {
   expect(weeklyStreak(new Map(), 3, '2026-W24')).toBe(0);
 });
 
+test('weeklyStreak with target <= 0 is 0 (and terminates)', () => {
+  // Without the guard, met() is always true and the backwards walk never ends.
+  expect(weeklyStreak(new Map(), 0, '2026-W24')).toBe(0);
+  expect(weeklyStreak(new Map([['2026-W24', 5]]), 0, '2026-W24')).toBe(0);
+  expect(weeklyStreak(new Map(), -1, '2026-W24')).toBe(0);
+});
+
 test('dayStreak grace and break behave like dailyStreak', () => {
   expect(dayStreak(new Set(['2026-06-07', '2026-06-08']), '2026-06-09')).toBe(2); // grace
   expect(dayStreak(new Set(['2026-06-07']), '2026-06-09')).toBe(0); // broken

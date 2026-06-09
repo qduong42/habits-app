@@ -8,6 +8,7 @@ import {
   time,
   date,
   unique,
+  primaryKey,
 } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
@@ -66,3 +67,26 @@ export const checkins = pgTable(
 );
 
 export type Checkin = typeof checkins.$inferSelect;
+
+export const achievements = pgTable('achievements', {
+  id: text('id').primaryKey(), // slug, e.g. 'habit-streak-7'
+  name: text('name').notNull(),
+  description: text('description').notNull(),
+  emoji: text('emoji').notNull(),
+});
+
+export type Achievement = typeof achievements.$inferSelect;
+
+export const userAchievements = pgTable(
+  'user_achievements',
+  {
+    userId: uuid('user_id').notNull().references(() => users.id),
+    achievementId: text('achievement_id')
+      .notNull()
+      .references(() => achievements.id),
+    unlockedAt: timestamp('unlocked_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.achievementId] })],
+);
+
+export type UserAchievement = typeof userAchievements.$inferSelect;
