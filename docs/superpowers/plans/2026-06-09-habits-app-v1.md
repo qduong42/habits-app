@@ -294,7 +294,7 @@ export const checkins = pgTable('checkins', {
 - Create: `server/src/game/dates.ts`
 - Test: `server/test/dates.test.ts`
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
 
 ```ts
 import { localDateFor, addDays, isoWeekOf } from '../src/game/dates.js';
@@ -314,9 +314,9 @@ test('isoWeekOf returns ISO year-week', () => {
 });
 ```
 
-- [ ] **Step 2: Implement** — `localDateFor` via `Intl.DateTimeFormat('en-CA', { timeZone, dateStyle: undefined, year:'numeric', month:'2-digit', day:'2-digit' })`; `addDays` via `Date.UTC` arithmetic on the Y-M-D parts; `isoWeekOf` via UTC Thursday-of-week algorithm.
+- [x] **Step 2: Implement** — `localDateFor` via `Intl.DateTimeFormat('en-CA', { timeZone, dateStyle: undefined, year:'numeric', month:'2-digit', day:'2-digit' })`; `addDays` via `Date.UTC` arithmetic on the Y-M-D parts; `isoWeekOf` via UTC Thursday-of-week algorithm.
 
-- [ ] **Step 3: Green + commit** — `feat(server): timezone-aware date utilities`
+- [x] **Step 3: Green + commit** — `feat(server): timezone-aware date utilities`
 
 ### Task 6: Habits routes (list with today status, create, edit, archive, delete)
 
