@@ -3,7 +3,15 @@ import request from 'supertest';
 import bcrypt from 'bcryptjs';
 import { eq, inArray, and } from 'drizzle-orm';
 import { db } from '../src/db/client.js';
-import { users, categories, habits, checkins } from '../src/db/schema.js';
+import {
+  users,
+  categories,
+  habits,
+  checkins,
+  achievements,
+  userAchievements,
+} from '../src/db/schema.js';
+import { ACHIEVEMENT_CATALOG } from '../src/game/achievements.js';
 import { localDateFor, addDays, isoWeekOf } from '../src/game/dates.js';
 import { createApp } from '../src/app.js';
 
@@ -35,6 +43,7 @@ async function cleanup() {
     .where(inArray(users.name, [USER_A, USER_B]));
   const ids = userRows.map((u) => u.id);
   if (ids.length > 0) {
+    await db.delete(userAchievements).where(inArray(userAchievements.userId, ids));
     await db.delete(checkins).where(inArray(checkins.userId, ids));
     await db.delete(habits).where(inArray(habits.userId, ids));
     await db.delete(categories).where(inArray(categories.userId, ids));
@@ -45,6 +54,19 @@ async function cleanup() {
 
 beforeAll(async () => {
   await cleanup(); // in case a previous run died mid-test
+  // The test DB is unseeded — check-ins award achievements since Task 13, so
+  // the catalog must exist (slug PK → onConflictDoNothing is idempotent).
+  await db
+    .insert(achievements)
+    .values(
+      ACHIEVEMENT_CATALOG.map(({ id, name, description, emoji }) => ({
+        id,
+        name,
+        description,
+        emoji,
+      })),
+    )
+    .onConflictDoNothing();
   const passwordHash = await bcrypt.hash(PASSWORD, 10);
   const [a] = await db.insert(users).values({ name: USER_A, passwordHash }).returning();
   const [b] = await db.insert(users).values({ name: USER_B, passwordHash }).returning();
@@ -86,7 +108,7 @@ describe('check-in and undo routes', () => {
   });
 
   describe('POST /api/habits/:id/checkin', () => {
-    it('checks in a daily habit → 200 with the exact contract (zeroed XP placeholders)', async () => {
+    it('checks in a daily habit → 200 with the exact contract (real XP since Task 13)', async () => {
       const { id } = await createHabit(cookieA, {
         name: 'Meditate',
         categoryId: builtinCatId,
@@ -95,13 +117,23 @@ describe('check-in and undo routes', () => {
 
       const res = await request(app).post(`/api/habits/${id}/checkin`).set('Cookie', cookieA);
       expect(res.status).toBe(200);
+      // First check-in of a fresh user with one habit: completes the day
+      // (10 + 25) and unlocks first-checkin.
       expect(res.body).toEqual({
-        xpGained: 0,
-        xpTotal: 0,
+        xpGained: 35,
+        xpTotal: 35,
         level: 1,
         leveledUp: false,
         habitStreak: 1,
-        unlockedAchievements: [],
+        unlockedAchievements: [
+          {
+            id: 'first-checkin',
+            name: 'First Step',
+            description: 'Complete your very first check-in.',
+            emoji: '🎉',
+            unlockedAt: expect.any(String),
+          },
+        ],
       });
 
       // and GET /habits reflects it
@@ -188,7 +220,10 @@ describe('check-in and undo routes', () => {
 
       const res = await request(app).post(`/api/habits/${id}/checkin`).set('Cookie', cookieA);
       expect(res.status).toBe(200);
-      expect(res.body).toMatchObject({ xpGained: 0, unlockedAchievements: [] });
+      // All of A's dailies are checked by the earlier tests, so this weekly
+      // check-in completes the day (35). first-checkin already unlocked → [].
+      // Weekly streak is 1/3 toward the target this week → 0.
+      expect(res.body).toMatchObject({ xpGained: 35, habitStreak: 0, unlockedAchievements: [] });
 
       const habit = await getHabit(cookieA, id);
       expect(habit).toMatchObject({
@@ -237,7 +272,14 @@ describe('check-in and undo routes', () => {
 
       const res = await request(app).delete(`/api/habits/${id}/checkin`).set('Cookie', cookieA);
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ ok: true });
+      // Task 13 extended the undo response (additive): the day was complete
+      // with this check-in and broken without it → loses the 25 bonus too.
+      expect(res.body).toEqual({
+        ok: true,
+        xpLost: 35,
+        xpTotal: expect.any(Number),
+        level: expect.any(Number),
+      });
 
       const habit = await getHabit(cookieA, id);
       expect(habit).toMatchObject({ doneToday: false, streak: 1 }); // yesterday's run remains

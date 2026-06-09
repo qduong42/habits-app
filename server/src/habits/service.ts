@@ -1,9 +1,15 @@
-import { and, eq, inArray, isNull, or } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
-import { categories, checkins, habits, users } from '../db/schema.js';
+import { achievements, categories, checkins, habits, userAchievements, users } from '../db/schema.js';
 import type { Category, Habit } from '../db/schema.js';
-import { addDays, isoWeekOf, localDateFor } from '../game/dates.js';
+import { isoWeekOf, localDateFor } from '../game/dates.js';
+import { checkinXp, levelFromXp } from '../game/xp.js';
+import { dailyStreak, dayStreak, weeklyStreak } from '../game/streaks.js';
+import { checkAchievements } from '../game/achievements.js';
 import { HttpError } from '../errors.js';
+
+/** A drizzle transaction handle (same query API as `db`). */
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /** Shared API contract shapes (plan: "Shared API contracts"). */
 export interface CategoryContract {
@@ -54,25 +60,30 @@ function isUniqueViolation(err: unknown, constraint: string): boolean {
   return cause?.code === '23505' && cause?.constraint === constraint;
 }
 
-/**
- * Simple consecutive-days streak ending today (or yesterday when today is
- * still unchecked — an open today doesn't break the run). The full streak
- * module (incl. weekly streaks) arrives in Task 11.
- */
-function inlineDailyStreak(dates: ReadonlySet<string>, today: string): number {
-  let day = dates.has(today) ? today : addDays(today, -1);
-  let streak = 0;
-  while (dates.has(day)) {
-    streak += 1;
-    day = addDays(day, -1);
+/** Checkins-per-ISO-week counts for one habit's dates (weeklyStreak input). */
+function weekCounts(dates: ReadonlySet<string>): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const d of dates) {
+    const week = isoWeekOf(d);
+    counts.set(week, (counts.get(week) ?? 0) + 1);
   }
-  return streak;
+  return counts;
+}
+
+function habitStreakOf(
+  habit: Pick<Habit, 'frequencyType' | 'weeklyTarget'>,
+  dates: Set<string>,
+  today: string,
+): number {
+  return habit.frequencyType === 'daily'
+    ? dailyStreak(dates, today)
+    : weeklyStreak(weekCounts(dates), habit.weeklyTarget ?? 0, isoWeekOf(today));
 }
 
 function toContract(
   habit: Habit,
   category: Category,
-  dates: ReadonlySet<string>,
+  dates: Set<string>,
   today: string,
 ): HabitContract {
   const doneToday = dates.has(today);
@@ -85,8 +96,7 @@ function toContract(
     habit.frequencyType === 'daily'
       ? true
       : weekCount < (habit.weeklyTarget ?? 0) || doneToday;
-  // Weekly streaks are wired in Task 11 — 0 for now.
-  const streak = habit.frequencyType === 'daily' ? inlineDailyStreak(dates, today) : 0;
+  const streak = habitStreakOf(habit, dates, today);
   return {
     id: habit.id,
     name: habit.name,
@@ -258,18 +268,39 @@ export async function archiveHabit(userId: string, habitId: string): Promise<voi
   if (updated.length === 0) throw notFound();
 }
 
-/** POST /habits/:id/checkin contract. XP fields are zeroed until Task 13. */
+/** Achievement contract: unlockedAt is non-null for fresh unlocks. */
+export interface UnlockedAchievement {
+  id: string;
+  name: string;
+  description: string;
+  emoji: string;
+  unlockedAt: string;
+}
+
+/** POST /habits/:id/checkin contract (plan: "Shared API contracts"). */
 export interface CheckinResult {
   xpGained: number;
   xpTotal: number;
   level: number;
   leveledUp: boolean;
   habitStreak: number;
-  unlockedAchievements: never[];
+  unlockedAchievements: UnlockedAchievement[];
 }
 
-async function ownedHabit(userId: string, habitId: string): Promise<Habit> {
-  const [habit] = await db
+/**
+ * DELETE /habits/:id/checkin response. Additive extension over the original
+ * `{ok: true}` so the frontend (Task 14) can roll the XP bar back without a
+ * refetch.
+ */
+export interface UndoResult {
+  ok: true;
+  xpLost: number;
+  xpTotal: number;
+  level: number;
+}
+
+async function ownedHabit(tx: Tx, userId: string, habitId: string): Promise<Habit> {
+  const [habit] = await tx
     .select()
     .from(habits)
     .where(and(eq(habits.id, habitId), eq(habits.userId, userId)));
@@ -277,46 +308,192 @@ async function ownedHabit(userId: string, habitId: string): Promise<Habit> {
   return habit;
 }
 
-export async function checkinHabit(userId: string, habitId: string): Promise<CheckinResult> {
-  const habit = await ownedHabit(userId, habitId);
-  if (habit.archivedAt !== null) {
-    throw new HttpError(400, 'archived', 'Cannot check in an archived habit');
+async function userTodayFor(tx: Tx, userId: string): Promise<string> {
+  const [user] = await tx
+    .select({ timezone: users.timezone })
+    .from(users)
+    .where(eq(users.id, userId));
+  if (!user) throw new HttpError(401, 'unauthenticated', 'Invalid session');
+  return localDateFor(user.timezone);
+}
+
+interface RewardState {
+  /** Active (non-archived) habits — the day-completion population. */
+  activeHabits: Pick<Habit, 'id' | 'frequencyType' | 'weeklyTarget'>[];
+  /** ALL of the user's checkins (incl. archived habits' — history counts). */
+  checkinRows: { habitId: string; localDate: string }[];
+  datesByHabit: Map<string, Set<string>>;
+}
+
+async function loadRewardState(tx: Tx, userId: string): Promise<RewardState> {
+  const activeHabits = await tx
+    .select({
+      id: habits.id,
+      frequencyType: habits.frequencyType,
+      weeklyTarget: habits.weeklyTarget,
+    })
+    .from(habits)
+    .where(and(eq(habits.userId, userId), isNull(habits.archivedAt)));
+  const checkinRows = await tx
+    .select({ habitId: checkins.habitId, localDate: checkins.localDate })
+    .from(checkins)
+    .where(eq(checkins.userId, userId));
+  const datesByHabit = new Map<string, Set<string>>();
+  for (const c of checkinRows) {
+    let set = datesByHabit.get(c.habitId);
+    if (!set) datesByHabit.set(c.habitId, (set = new Set()));
+    set.add(c.localDate);
   }
-  const today = await todayFor(userId);
+  return { activeHabits, checkinRows, datesByHabit };
+}
+
+/**
+ * Day-completion rule (same scheduledToday semantics as GET /habits):
+ * daily habits are always scheduled; a weekly habit done today counts as
+ * scheduled-and-done even when the check-in just reached the target; a weekly
+ * habit NOT done today whose target is already met is unscheduled and
+ * therefore excluded from the bonus requirement.
+ */
+function allScheduledDone(
+  activeHabits: RewardState['activeHabits'],
+  datesByHabit: Map<string, Set<string>>,
+  today: string,
+): boolean {
+  const currentWeek = isoWeekOf(today);
+  return activeHabits.every((h) => {
+    const dates = datesByHabit.get(h.id) ?? new Set<string>();
+    if (dates.has(today)) return true; // done today → scheduled-and-done
+    if (h.frequencyType === 'daily') return false; // daily always scheduled
+    let weekCount = 0;
+    for (const d of dates) {
+      if (isoWeekOf(d) === currentWeek) weekCount += 1;
+    }
+    // weekly, not done today: scheduled (and open) iff under target
+    return weekCount >= (h.weeklyTarget ?? 0);
+  });
+}
+
+/** Atomic xp_total adjustment; `delta` may be negative (floored at 0). */
+async function adjustXp(tx: Tx, userId: string, delta: number): Promise<number> {
+  const [updated] = await tx
+    .update(users)
+    .set({ xpTotal: sql`GREATEST(${users.xpTotal} + ${delta}, 0)` })
+    .where(eq(users.id, userId))
+    .returning({ xpTotal: users.xpTotal });
+  return updated!.xpTotal;
+}
+
+export async function checkinHabit(userId: string, habitId: string): Promise<CheckinResult> {
   try {
-    await db.insert(checkins).values({ habitId, userId, localDate: today });
+    return await db.transaction(async (tx) => {
+      const habit = await ownedHabit(tx, userId, habitId);
+      if (habit.archivedAt !== null) {
+        throw new HttpError(400, 'archived', 'Cannot check in an archived habit');
+      }
+      const today = await userTodayFor(tx, userId);
+
+      // A duplicate aborts the transaction here; the 409 mapping happens
+      // OUTSIDE the transaction (Rule 11) because the throw rolls it back.
+      await tx.insert(checkins).values({ habitId, userId, localDate: today });
+
+      // Everything below sees the post-insert state.
+      const { activeHabits, checkinRows, datesByHabit } = await loadRewardState(tx, userId);
+      const completesDay = allScheduledDone(activeHabits, datesByHabit, today);
+      const habitStreak = habitStreakOf(habit, datesByHabit.get(habitId) ?? new Set(), today);
+
+      const xpGained = checkinXp({ completesDay });
+      const xpTotal = await adjustXp(tx, userId, xpGained);
+      const level = levelFromXp(xpTotal);
+      const leveledUp = level > levelFromXp(xpTotal - xpGained);
+
+      // Achievement context — all post-insert, level post-increment.
+      const todayCategoryRows = await tx
+        .selectDistinct({ categoryId: habits.categoryId })
+        .from(checkins)
+        .innerJoin(habits, eq(checkins.habitId, habits.id))
+        .where(and(eq(checkins.userId, userId), eq(checkins.localDate, today)));
+      const unlockedRows = await tx
+        .select({ achievementId: userAchievements.achievementId })
+        .from(userAchievements)
+        .where(eq(userAchievements.userId, userId));
+      const newIds = checkAchievements({
+        totalCheckins: checkinRows.length,
+        habitStreak,
+        dayStreak: dayStreak(new Set(checkinRows.map((r) => r.localDate)), today),
+        level,
+        conversions: 0, // wired in Task 15 (inbox table doesn't exist yet)
+        categoriesToday: todayCategoryRows.length,
+        unlocked: new Set(unlockedRows.map((r) => r.achievementId)),
+      });
+
+      let unlockedAchievements: UnlockedAchievement[] = [];
+      if (newIds.length > 0) {
+        const inserted = await tx
+          .insert(userAchievements)
+          .values(newIds.map((achievementId) => ({ userId, achievementId })))
+          .returning();
+        const unlockedAt = new Map(
+          inserted.map((r) => [r.achievementId, r.unlockedAt.toISOString()]),
+        );
+        const defs = await tx
+          .select()
+          .from(achievements)
+          .where(inArray(achievements.id, newIds));
+        const defById = new Map(defs.map((d) => [d.id, d]));
+        unlockedAchievements = newIds.map((id) => {
+          const def = defById.get(id)!; // FK guarantees the catalog row exists
+          return {
+            id,
+            name: def.name,
+            description: def.description,
+            emoji: def.emoji,
+            unlockedAt: unlockedAt.get(id)!,
+          };
+        });
+      }
+
+      return { xpGained, xpTotal, level, leveledUp, habitStreak, unlockedAchievements };
+    });
   } catch (err) {
     if (isUniqueViolation(err, 'uniq_checkin_per_day')) {
       throw new HttpError(409, 'already_done', 'Habit already checked in today');
     }
     throw err;
   }
-  const rows = await db
-    .select({ localDate: checkins.localDate })
-    .from(checkins)
-    .where(eq(checkins.habitId, habitId));
-  const habitStreak = inlineDailyStreak(new Set(rows.map((r) => r.localDate)), today);
-  // XP/levels/achievements are wired in Task 13 — placeholders for now.
-  return {
-    xpGained: 0,
-    xpTotal: 0,
-    level: 1,
-    leveledUp: false,
-    habitStreak,
-    unlockedAchievements: [],
-  };
 }
 
-export async function undoCheckin(userId: string, habitId: string): Promise<void> {
-  await ownedHabit(userId, habitId);
-  const today = await todayFor(userId);
-  const deleted = await db
-    .delete(checkins)
-    .where(and(eq(checkins.habitId, habitId), eq(checkins.localDate, today)))
-    .returning({ id: checkins.id });
-  if (deleted.length === 0) {
-    throw new HttpError(404, 'not_found', 'No check-in today to undo');
-  }
+/**
+ * Undo reverses exactly what today's check-in gained. The 25-point day bonus
+ * is lost whenever the undo breaks a completed day — even when the check-in
+ * being undone was not the one that completed it (spec: "undo reverses what
+ * that check-in gained... and the +25 bonus if the undo breaks a completed
+ * day"). Achievements are one-way and never revoked.
+ */
+export async function undoCheckin(userId: string, habitId: string): Promise<UndoResult> {
+  return db.transaction(async (tx) => {
+    await ownedHabit(tx, userId, habitId);
+    const today = await userTodayFor(tx, userId);
+
+    const deleted = await tx
+      .delete(checkins)
+      .where(and(eq(checkins.habitId, habitId), eq(checkins.localDate, today)))
+      .returning({ id: checkins.id });
+    if (deleted.length === 0) {
+      throw new HttpError(404, 'not_found', 'No check-in today to undo');
+    }
+
+    // Post-delete state; reconstruct the pre-delete state in memory by adding
+    // the removed check-in back (also restores its weekCount contribution).
+    const { activeHabits, datesByHabit } = await loadRewardState(tx, userId);
+    const nowComplete = allScheduledDone(activeHabits, datesByHabit, today);
+    const beforeDelete = new Map(datesByHabit);
+    beforeDelete.set(habitId, new Set([...(datesByHabit.get(habitId) ?? [])]).add(today));
+    const wasComplete = allScheduledDone(activeHabits, beforeDelete, today);
+
+    const xpLost = checkinXp({ completesDay: wasComplete && !nowComplete });
+    const xpTotal = await adjustXp(tx, userId, -xpLost);
+    return { ok: true, xpLost, xpTotal, level: levelFromXp(xpTotal) };
+  });
 }
 
 export async function deleteHabit(userId: string, habitId: string): Promise<void> {

@@ -318,11 +318,14 @@ describe('habits routes', () => {
 
       const res = await request(app).get('/api/habits').set('Cookie', cookieA);
       const habit = res.body.habits.find((h: { id: string }) => h.id === habitId);
+      // Weekly streaks are real since Task 13 (weeklyStreak): whether
+      // yesterday fell in this ISO week (met) or last week (met, current
+      // pending), the streak is 1 either way.
       expect(habit).toMatchObject({
         doneToday: false,
         weekCount: expectedWeekCount,
         scheduledToday: expectedWeekCount < 1, // target met and not done today → unscheduled
-        streak: 0, // weekly streaks land in Task 11
+        streak: 1,
       });
     });
 
@@ -343,6 +346,7 @@ describe('habits routes', () => {
         doneToday: true,
         weekCount: 1,
         scheduledToday: true,
+        streak: 1, // target 1 met this week → real weekly streak since Task 13
       });
     });
   });

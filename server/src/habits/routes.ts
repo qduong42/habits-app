@@ -104,6 +104,6 @@ habitsRouter.post('/:id/checkin', async (req, res) => {
 });
 
 habitsRouter.delete('/:id/checkin', async (req, res) => {
-  await undoCheckin(userIdOf(req), habitId(req.params.id));
-  res.json({ ok: true });
+  // {ok, xpLost, xpTotal, level} — additive over the original {ok: true}
+  res.json(await undoCheckin(userIdOf(req), habitId(req.params.id)));
 });
