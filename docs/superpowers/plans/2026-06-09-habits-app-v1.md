@@ -358,13 +358,13 @@ test('isoWeekOf returns ISO year-week', () => {
 - Create: `web/src/components/HabitRow.tsx`, `web/src/components/XpBar.tsx`, `web/src/components/HabitForm.tsx`, `web/src/hooks/useHabits.ts`
 - Modify: `web/src/pages/Today.tsx`, `web/src/index.css`
 
-- [ ] **Step 1: Data hooks** — `useHabits()` (React Query on `/habits`), `useCheckin(habitId)` mutation with optimistic toggle of `doneToday` + rollback, `useCategories()`.
+- [x] **Step 1: Data hooks** — `useHabits()` (React Query on `/habits`), `useCheckin(habitId)` mutation with optimistic toggle of `doneToday` + rollback, `useCategories()`.
 
-- [ ] **Step 2: Today layout per approved mockup** — header: "Today" + weekday/date right; thin XP bar (gradient `#7c4dff→#448aff`) with `Lv N` / `xp % 1000 / 1000 XP` row beneath (values from check-in responses later; render from `/stats` once Task 17 lands — until then read level/xp from the last check-in response or show `Lv 1, 0/1000`). Habits grouped by category: light colored header row `{emoji} {name} {done}/{scheduled}` in category color, flat white rounded rows under it: tap circle → check (green ✓, strikethrough), streak flame `🔥 N` right-aligned when `streak > 0`. Weekly habits show `{weekCount}/{weeklyTarget} this week` under the name; when target met and not doneToday, row renders in the done style with circle disabled.
+- [x] **Step 2: Today layout per approved mockup** — header: "Today" + weekday/date right; thin XP bar (gradient `#7c4dff→#448aff`) with `Lv N` / `xp % 1000 / 1000 XP` row beneath (values from check-in responses later; render from `/stats` once Task 17 lands — until then read level/xp from the last check-in response or show `Lv 1, 0/1000`). Habits grouped by category: light colored header row `{emoji} {name} {done}/{scheduled}` in category color, flat white rounded rows under it: tap circle → check (green ✓, strikethrough), streak flame `🔥 N` right-aligned when `streak > 0`. Weekly habits show `{weekCount}/{weeklyTarget} this week` under the name; when target met and not doneToday, row renders in the done style with circle disabled.
 
-- [ ] **Step 3: Create/edit** — floating `+` button (bottom right, above tab bar) → `HabitForm` bottom sheet: name, category select (with inline "new category" option), frequency toggle daily/weekly + target stepper, notes. Long-press or row-menu (simple ⋯ button) → edit / archive / delete with confirm.
+- [x] **Step 3: Create/edit** — floating `+` button (bottom right, above tab bar) → `HabitForm` bottom sheet: name, category select (with inline "new category" option), frequency toggle daily/weekly + target stepper, notes. Long-press or row-menu (simple ⋯ button) → edit / archive / delete with confirm.
 
-- [ ] **Step 4: Verify + manual + commit** — `npm run verify`; manual: create habits in 3 categories, check off, undo, see weekly counter. Commit: `feat(web): Today checklist with grouped categories and habit management`
+- [x] **Step 4: Verify + manual + commit** — `npm run verify`; manual: create habits in 3 categories, check off, undo, see weekly counter. Commit: `feat(web): Today checklist with grouped categories and habit management`
 
 **Slice 1 demo:** usable daily habit tracker on the phone (sans gamification).
 
