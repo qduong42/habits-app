@@ -4,9 +4,11 @@ import { HttpError } from '../errors.js';
 import { requireAuth, type AuthedRequest } from '../auth/middleware.js';
 import {
   archiveHabit,
+  checkinHabit,
   createHabit,
   deleteHabit,
   listHabits,
+  undoCheckin,
   updateHabit,
 } from './service.js';
 
@@ -94,5 +96,14 @@ habitsRouter.post('/:id/archive', async (req, res) => {
 
 habitsRouter.delete('/:id', async (req, res) => {
   await deleteHabit(userIdOf(req), habitId(req.params.id));
+  res.json({ ok: true });
+});
+
+habitsRouter.post('/:id/checkin', async (req, res) => {
+  res.json(await checkinHabit(userIdOf(req), habitId(req.params.id)));
+});
+
+habitsRouter.delete('/:id/checkin', async (req, res) => {
+  await undoCheckin(userIdOf(req), habitId(req.params.id));
   res.json({ ok: true });
 });

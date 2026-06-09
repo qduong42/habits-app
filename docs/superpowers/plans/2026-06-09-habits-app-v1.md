@@ -337,11 +337,11 @@ test('isoWeekOf returns ISO year-week', () => {
 - Modify: `server/src/habits/routes.ts`, `server/src/habits/service.ts`
 - Test: `server/test/checkins.test.ts`
 
-- [ ] **Step 1: Failing tests** — `POST /api/habits/:id/checkin` → 200, `GET /habits` now `doneToday:true`, `streak:1`; duplicate same day → 409 `{error.code:'already_done'}`; `DELETE .../checkin` undoes today only (404 if nothing today); archived habit check-in → 400; foreign habit → 404. Response shape: full contract with `xpGained: 0` placeholder fields zeroed for now (`xpGained:0, xpTotal:0, level:1, leveledUp:false, unlockedAchievements:[]`, real `habitStreak`).
+- [x] **Step 1: Failing tests** — `POST /api/habits/:id/checkin` → 200, `GET /habits` now `doneToday:true`, `streak:1`; duplicate same day → 409 `{error.code:'already_done'}`; `DELETE .../checkin` undoes today only (404 if nothing today); archived habit check-in → 400; foreign habit → 404. Response shape: full contract with `xpGained: 0` placeholder fields zeroed for now (`xpGained:0, xpTotal:0, level:1, leveledUp:false, unlockedAchievements:[]`, real `habitStreak`).
 
-- [ ] **Step 2: Implement** — insert with unique-violation catch → 409. Streak: fetch habit's checkin dates, compute inline consecutive-days count ending today (full streak logic arrives in Task 11; reuse `addDays`).
+- [x] **Step 2: Implement** — insert with unique-violation catch → 409. Streak: fetch habit's checkin dates, compute inline consecutive-days count ending today (full streak logic arrives in Task 11; reuse `addDays`).
 
-- [ ] **Step 3: Green + commit** — `feat(server): habit check-in and undo`
+- [x] **Step 3: Green + commit** — `feat(server): habit check-in and undo`
 
 ### Task 8: Categories routes
 

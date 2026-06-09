@@ -48,6 +48,12 @@ export interface UpdateHabitInput {
 
 const notFound = () => new HttpError(404, 'not_found', 'Habit not found');
 
+/** Rule 11: Drizzle 0.45 wraps pg errors — pg fields live on `err.cause`. */
+function isUniqueViolation(err: unknown, constraint: string): boolean {
+  const cause = (err as { cause?: { code?: string; constraint?: string } } | null)?.cause;
+  return cause?.code === '23505' && cause?.constraint === constraint;
+}
+
 /**
  * Simple consecutive-days streak ending today (or yesterday when today is
  * still unchecked — an open today doesn't break the run). The full streak
@@ -243,12 +249,74 @@ export async function updateHabit(
 }
 
 export async function archiveHabit(userId: string, habitId: string): Promise<void> {
+  // Already-archived habits are hidden everywhere else, so re-archive is 404 too.
   const updated = await db
     .update(habits)
     .set({ archivedAt: new Date() })
-    .where(and(eq(habits.id, habitId), eq(habits.userId, userId)))
+    .where(and(eq(habits.id, habitId), eq(habits.userId, userId), isNull(habits.archivedAt)))
     .returning({ id: habits.id });
   if (updated.length === 0) throw notFound();
+}
+
+/** POST /habits/:id/checkin contract. XP fields are zeroed until Task 13. */
+export interface CheckinResult {
+  xpGained: number;
+  xpTotal: number;
+  level: number;
+  leveledUp: boolean;
+  habitStreak: number;
+  unlockedAchievements: never[];
+}
+
+async function ownedHabit(userId: string, habitId: string): Promise<Habit> {
+  const [habit] = await db
+    .select()
+    .from(habits)
+    .where(and(eq(habits.id, habitId), eq(habits.userId, userId)));
+  if (!habit) throw notFound();
+  return habit;
+}
+
+export async function checkinHabit(userId: string, habitId: string): Promise<CheckinResult> {
+  const habit = await ownedHabit(userId, habitId);
+  if (habit.archivedAt !== null) {
+    throw new HttpError(400, 'archived', 'Cannot check in an archived habit');
+  }
+  const today = await todayFor(userId);
+  try {
+    await db.insert(checkins).values({ habitId, userId, localDate: today });
+  } catch (err) {
+    if (isUniqueViolation(err, 'uniq_checkin_per_day')) {
+      throw new HttpError(409, 'already_done', 'Habit already checked in today');
+    }
+    throw err;
+  }
+  const rows = await db
+    .select({ localDate: checkins.localDate })
+    .from(checkins)
+    .where(eq(checkins.habitId, habitId));
+  const habitStreak = inlineDailyStreak(new Set(rows.map((r) => r.localDate)), today);
+  // XP/levels/achievements are wired in Task 13 — placeholders for now.
+  return {
+    xpGained: 0,
+    xpTotal: 0,
+    level: 1,
+    leveledUp: false,
+    habitStreak,
+    unlockedAchievements: [],
+  };
+}
+
+export async function undoCheckin(userId: string, habitId: string): Promise<void> {
+  await ownedHabit(userId, habitId);
+  const today = await todayFor(userId);
+  const deleted = await db
+    .delete(checkins)
+    .where(and(eq(checkins.habitId, habitId), eq(checkins.localDate, today)))
+    .returning({ id: checkins.id });
+  if (deleted.length === 0) {
+    throw new HttpError(404, 'not_found', 'No check-in today to undo');
+  }
 }
 
 export async function deleteHabit(userId: string, habitId: string): Promise<void> {
