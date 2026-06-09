@@ -1,0 +1,11 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: habits
+      POSTGRES_PASSWORD: habits
+      POSTGRES_DB: habits
+    ports: ["5433:5432"]
+    volumes: [postgres_data:/var/lib/postgresql/data]
+volumes:
+  postgres_data:

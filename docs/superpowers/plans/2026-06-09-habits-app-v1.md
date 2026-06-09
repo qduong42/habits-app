@@ -12,7 +12,7 @@
 
 ## Rules for every worker (read before any task)
 
-1. **One task per session.** Pick the FIRST task below whose checkboxes are not all ticked. Do only that task.
+1. **One task per session.** Pick the FIRST task below (in **document order** — task numbers are labels, not ordering; Tasks 25–27 sit between 16 and 17 on purpose) whose checkboxes are not all ticked. Do only that task.
 2. **TDD for server logic**: write the failing test, see it fail, implement, see it pass. Frontend tasks are verified by `npm run verify` + the listed manual checks.
 3. Before every commit run `npm run verify` from the repo root (typecheck + tests + build). It must pass.
 4. Tick the checkboxes of your task in THIS file (edit `- [ ]` → `- [x]`), commit everything in one commit with the message given in the task, and push with `git push origin feat/habits-app-v1`.
@@ -43,9 +43,22 @@
 // Achievement
 { id: string, name: string, description: string, emoji: string, unlockedAt: string | null }
 
-// InboxItem
+// InboxItem (UI name: "Dump item" — the tab is labeled Dump, DB/API keep `inbox`)
 { id: string, text: string, sourceUrl: string | null, status: 'open'|'converted'|'discarded',
-  habitId: string | null, createdAt: string }
+  habitId: string | null, taskId: string | null, createdAt: string }
+
+// TaskItem (GET /tasks item) — server-computed grouping; recurring tasks not yet due are EXCLUDED
+{ id: string, name: string, notes: string | null, sourceUrl: string | null,
+  kind: 'oneoff' | 'recurring',
+  group: 'overdue' | 'today' | 'undated' | 'done',   // done = completed this local day
+  dueLabel: string | null,   // 'overdue 1d' | 'overdue 3h' | 'due today' | 'due 20:00' | null
+  dueDate: string | null, intervalHours: number | null, nextDue: string | null }
+
+// GET /tasks → { tasks: TaskItem[] }  (ordered: overdue, today, undated, done)
+
+// POST /tasks/:id/complete →
+{ xpGained: 5, xpTotal: number, level: number, leveledUp: boolean,
+  nextDue: string | null, unlockedAchievements: Achievement[] }
 
 // GET /stats →
 { dayStreak: number, totalCheckins: number, xpTotal: number, level: number,
@@ -213,7 +226,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 
 - [ ] **Step 1: API client** — `api.ts`: `apiFetch(path, opts)` → `fetch('/api'+path, { credentials: 'include', headers: {'Content-Type':'application/json'}, ...opts })`; throws `ApiError {code,message,status}` parsed from the error envelope; on 401 set `location.hash = '#/login'`. Use hash routing (`createHashRouter`) so static serving needs no server config.
 
-- [ ] **Step 2: Auth + layout** — `auth.tsx`: React Query `useMe()` (`GET /auth/me`), `<RequireAuth>` redirects to `/login`. `Layout.tsx`: mobile-first column, content area + fixed bottom tab bar with 4 NavLinks (Today ✅ / Inbox 📥 / Stats 📊 / Profile 👤), active tab highlighted purple `#5e35b1`. `index.css`: system font stack, `max-width: 480px` centered shell, light gray `#fafafa` background — matches approved mockup styling.
+- [ ] **Step 2: Auth + layout** — `auth.tsx`: React Query `useMe()` (`GET /auth/me`), `<RequireAuth>` redirects to `/login`. `Layout.tsx`: mobile-first column, content area + fixed bottom tab bar with 4 NavLinks (Today ✅ / Dump 🧠 / Stats 📊 / Profile 👤 — yes, the tab is called **Dump**), active tab highlighted purple `#5e35b1`. `index.css`: system font stack, `max-width: 480px` centered shell, light gray `#fafafa` background — matches approved mockup styling.
 
 - [ ] **Step 3: Login page** — name + password inputs, "remember me" checkbox, error message on 401. On success invalidate `me` query and navigate to `/`.
 
@@ -494,19 +507,90 @@ test('awards thresholds crossed and skips already-unlocked', () => {
 
 - [ ] **Step 2: Implement + green + commit** — `feat(server): idea inbox with convert-to-habit`
 
-### Task 16: Inbox UI + quick capture
+### Task 16: Dump tab UI + quick capture
 
 **Files:**
-- Modify: `web/src/pages/Inbox.tsx`, `web/src/pages/Today.tsx`, `web/src/components/HabitForm.tsx`
+- Modify: `web/src/pages/Inbox.tsx` (the tab labeled "Dump"), `web/src/pages/Today.tsx`, `web/src/components/HabitForm.tsx`
 - Create: `web/src/components/CaptureSheet.tsx`
 
-- [ ] **Step 1: Capture everywhere** — the floating `+` on Today opens a two-option sheet: "💡 Capture idea" (text + optional URL → `POST /inbox`) / "➕ New habit" (existing form). Inbox tab badge shows open count in the tab bar.
+- [ ] **Step 1: Capture everywhere** — top of the Dump tab: zero-friction capture box (type → enter → posts `POST /inbox` → input clears, keep typing; optional collapsed URL field). The floating `+` on Today opens a sheet with "💡 Dump a thought" (same capture → `POST /inbox`) / "➕ New habit" (existing form). Dump tab badge shows open count in the tab bar.
 
-- [ ] **Step 2: Inbox list** — items with text, link-out icon when sourceUrl, age ("3d"); per item: **Convert** (opens `HabitForm` prefilled, on success shows the achievement celebration if any) and **Discard**. Empty state: "Read something inspiring? Capture it here and turn it into a habit."
+- [ ] **Step 2: Dump list** — open items with text, link-out icon when sourceUrl, age ("3d"); per item: **→ Habit** (opens `HabitForm` prefilled, on success shows the achievement celebration if any) and **Discard**. (Card-by-card triage incl. task outcomes lands in Task 27.) Empty state: "Mind full? Dump it here — then schedule it."
 
-- [ ] **Step 3: Verify + manual + commit** — `feat(web): idea inbox with capture sheet and convert flow`
+- [ ] **Step 3: Verify + manual + commit** — `feat(web): dump tab with quick capture and convert-to-habit`
 
 **Slice 3 demo:** paste a Substack takeaway → it becomes a tracked habit.
+
+---
+
+## Slice 3b — Tasks & triage (brain-dump outcomes; numbered 25–27, executed in document order)
+
+### Task 25: Tasks schema + routes (TDD)
+
+**Files:**
+- Modify: `server/src/db/schema.ts` (+`tasks`, `taskCompletions` tables; +`taskId` column on `inboxItems`), `server/src/app.ts`
+- Create: `server/src/tasks/routes.ts`, `server/src/tasks/service.ts`, `server/src/game/dueness.ts`
+- Test: `server/test/dueness.test.ts`, `server/test/tasks.test.ts`
+
+- [ ] **Step 1: Schema** — per spec: `tasks` (`dueDate date` nullable, `intervalHours numeric` nullable — set = recurring, `nextDue timestamptz` nullable, `completedAt timestamptz` nullable) and `task_completions` (`taskId` cascade FK, `userId`, `localDate date`, `createdAt`; **no unique constraint** — sub-daily tasks complete multiple times per day). Add `taskId uuid` nullable FK on `inbox_items`. Generate + run migration.
+
+- [ ] **Step 2: Failing unit tests for dueness (pure fn)**
+
+```ts
+import { taskGroup, dueLabel } from '../src/game/dueness.js';
+// taskGroup(task, now, today, tz) → 'overdue'|'today'|'undated'|'done'|'hidden'
+test('one-off grouping', () => {
+  const base = { kind: 'oneoff', completedAt: null, dueDate: null };
+  expect(taskGroup({ ...base, dueDate: '2026-06-09' }, new Date('2026-06-10T08:00:00Z'), '2026-06-10')).toBe('overdue');
+  expect(taskGroup({ ...base, dueDate: '2026-06-10' }, new Date('2026-06-10T08:00:00Z'), '2026-06-10')).toBe('today');
+  expect(taskGroup(base, new Date('2026-06-10T08:00:00Z'), '2026-06-10')).toBe('undated');
+});
+test('recurring grouping incl. sub-daily reappearance', () => {
+  const rec = { kind: 'recurring', intervalHours: 12 };
+  expect(taskGroup({ ...rec, nextDue: '2026-06-10T06:00:00Z' }, new Date('2026-06-10T08:00:00Z'), '2026-06-10')).toBe('today');
+  expect(taskGroup({ ...rec, nextDue: '2026-06-09T06:00:00Z' }, new Date('2026-06-10T08:00:00Z'), '2026-06-10')).toBe('overdue'); // >24h late
+  expect(taskGroup({ ...rec, nextDue: '2026-06-10T20:00:00Z' }, new Date('2026-06-10T08:00:00Z'), '2026-06-10')).toBe('hidden');
+});
+test('dueLabel', () => {
+  expect(dueLabel('overdue', { nextDue: '2026-06-10T05:00:00Z' }, new Date('2026-06-10T08:00:00Z'), 'UTC')).toBe('overdue 3h');
+  expect(dueLabel('today', { nextDue: '2026-06-10T20:00:00Z' }, new Date('2026-06-10T08:00:00Z'), 'UTC')).toBe('due 20:00');
+  expect(dueLabel('today', { dueDate: '2026-06-10' }, new Date('2026-06-10T08:00:00Z'), 'UTC')).toBe('due today');
+});
+```
+
+Definitions: recurring `overdue` = `nextDue <= now` for one-offs `dueDate < today`; recurring with `now - nextDue < 24h` whose nextDue is the current local day = `today` group, otherwise `overdue` with day/hour label; `done` = one-off completed on `today` OR recurring whose latest completion has `localDate === today` AND not yet due again; `hidden` = recurring not yet due (excluded from API response).
+
+- [ ] **Step 3: Failing integration tests** — create one-off (with/without dueDate) and recurring (`intervalHours: 120`); `GET /tasks` matches contract incl. ordering (overdue → today → undated → done) and excludes hidden recurring; `POST /tasks/:id/complete` one-off → `{xpGained: 5}`, user xp +5, task in `done` group; complete again → 409; recurring complete → `nextDue ≈ now + 120h`, completing a 12h task twice in one day works and earns 10 XP total; `DELETE /tasks/:id/complete` same-day undo restores prior state and xp; undo with no completion today → 404; foreign task → 404; `POST /tasks` validation: `dueDate` AND `intervalHours` together → 400, `intervalHours < 1` → 400; achievements come back through the same `checkAchievements` path (level-up by task XP works).
+
+- [ ] **Step 4: Implement** — `dueness.ts` pure; `service.ts` complete/undo in one `db.transaction` mirroring the check-in transaction (reuse the achievement-context builder from `habits/service.ts` — extract a shared `game/rewards.ts` helper if that avoids duplication); wire `/api/tasks`.
+
+- [ ] **Step 5: Green + commit** — `feat(server): one-off and recurring tasks with reset-on-completion`
+
+### Task 26: Today 📌 Tasks section + task create/edit UI
+
+**Files:**
+- Create: `web/src/components/TaskRow.tsx`, `web/src/components/TaskForm.tsx`, `web/src/hooks/useTasks.ts`
+- Modify: `web/src/pages/Today.tsx`, `web/src/components/CaptureSheet.tsx`
+
+- [ ] **Step 1: Tasks section** — pinned ABOVE habit categories, header `📌 Tasks {done}/{visible}` in `#bf360c`; rows like habit rows but **square** check boxes; right-aligned `dueLabel` (red `#c62828` for overdue, orange `#e65100` for today); done-today tasks struck through at the bottom of the section; section hidden entirely when no tasks. Optimistic complete/undo via `useTasks()` + `useCompleteTask()` (rewards payload feeds the same XP toast/celebration path as check-ins).
+
+- [ ] **Step 2: Create/edit** — `TaskForm` bottom sheet: name, mode toggle "once / recurring"; once → optional due date picker; recurring → interval picker (number + unit hours/days, stored as hours, min 1h); notes. Add "✅ New task" to the CaptureSheet on Today. Row ⋯ menu → edit / delete with confirm.
+
+- [ ] **Step 3: Verify + manual + commit** — manual: water-plants 120h task, 12h task completing twice. Commit: `feat(web): tasks section on Today with create/edit`
+
+### Task 27: Triage flow (card-by-card) + convert-task
+
+**Files:**
+- Modify: `server/src/inbox/routes.ts` (+`POST /inbox/:id/convert-task`), `server/test/inbox.test.ts`
+- Create: `web/src/components/TriageCard.tsx`; Modify: `web/src/pages/Inbox.tsx`
+
+- [ ] **Step 1: TDD convert-task** — failing tests: convert-task with `{name, dueDate?}` or `{name, intervalHours}` → creates task carrying notes (default item text) + sourceUrl, item → `status:'converted', taskId`; converting an already-converted item → 409; conversions achievement count includes BOTH habit and task conversions (assert `first-conversion` unlocks via convert-task). Implement, green.
+
+- [ ] **Step 2: Triage UI** — `Triage N items →` button on Dump tab opens card-by-card mode (one item per screen, progress `2 / 5`): four big buttons per the approved mockup — ✅ Task once (inline optional date → convert-task) / 🔁 Task recurring (inline interval picker → convert-task) / 🌱 Habit (prefilled `HabitForm` → convert) / 🗑 Let it go (discard). Advances to next item; final card → "Mind clear 🧘" + back to Dump. Per-item **→ Habit / Discard** buttons from Task 16 remain as shortcuts.
+
+- [ ] **Step 3: Verify + manual + commit** — `feat: card-by-card triage with task conversion`
+
+**Slice 3b demo:** dump 5 thoughts → triage into a dated task, a 12h recurring task, a habit, and a discard → Today shows the 📌 section.
 
 ---
 
@@ -549,7 +633,7 @@ test('awards thresholds crossed and skips already-unlocked', () => {
 - Create: `server/src/push/routes.ts`, `server/src/push/nudge.ts`; Modify: `server/src/app.ts`, `server/src/index.ts`, `.env.example` (VAPID keys), `web/src/pages/Profile.tsx` (+ enable-notifications button), `web/src/sw-push.ts` (push event → showNotification, click → open `/`)
 - Test: `server/test/nudge.test.ts`
 
-- [ ] **Step 1: TDD nudge logic** — `openHabitsCount(userId, today)` (scheduled-but-not-done count) tested via seeded data; `sendNudge(user)` with injected `webpush` fake: sends `{title: '🔥 N habits left today'}` only when count>0 and subscription exists; on 410 clears `push_subscription`.
+- [ ] **Step 1: TDD nudge logic** — `openHabitsCount(userId, today)` (scheduled-but-not-done count) and `dueTasksCount(userId, now)` (overdue + today groups via `dueness.ts`) tested via seeded data; `sendNudge(user)` with injected `webpush` fake: sends `{title: '🔥 2 habits · 1 task left today'}` (omit a zero part; singular/plural correct) only when total>0 and subscription exists; on 410 clears `push_subscription`.
 - [ ] **Step 2: Scheduler** — `scheduleAllNudges()` on boot + reschedule on settings change: `node-schedule` cron at user's `nudgeTime` interpreted in user TZ (use `{ rule, tz }` recurrence). Generate VAPID via `npx web-push generate-vapid-keys`, document in `.env.example`; `GET /api/push/vapid-public-key` route; frontend: `pushManager.subscribe` → `POST /push/subscribe`.
 - [ ] **Step 3: Green + verify + commit** — `feat: daily nudge web push`
 
@@ -566,8 +650,8 @@ test('awards thresholds crossed and skips already-unlocked', () => {
 
 ### Task 23: Dedicated refactor pass
 
-- [ ] **Step 1:** Re-read all of `server/src` and `web/src`: collapse duplication (esp. habit status computation used by routes/stats/nudge — should live once in `service.ts`/`game/`), dead code, naming drift vs the contracts section. No behavior changes; `npm run verify` green before and after. Commit: `refactor: consolidate habit status logic, naming cleanup`
+- [ ] **Step 1:** Re-read all of `server/src` and `web/src`: collapse duplication (esp. habit status computation used by routes/stats/nudge, and the rewards transaction shared by check-ins and task completions — each should live once in `service.ts`/`game/`), dead code, naming drift vs the contracts section and CONTEXT.md language (Dump/Triage/Check-in/Completion). No behavior changes; `npm run verify` green before and after. Commit: `refactor: consolidate habit status logic, naming cleanup`
 
 ### Task 24: QA report
 
-- [ ] **Step 1:** Run full suite + build; exercise main flows with curl against a dev server (login → create habit → checkin → rewards → inbox capture → convert → stats). Write `docs/superpowers/ralph/QA-REPORT.md`: what works, response samples, any gaps for the morning review. Commit: `docs: overnight QA report`
+- [ ] **Step 1:** Run full suite + build; exercise main flows with curl against a dev server (login → create habit → checkin → rewards → dump capture → triage to habit AND to recurring task → complete task incl. sub-daily double-complete → undo → stats). Write `docs/superpowers/ralph/QA-REPORT.md`: what works, response samples, any gaps for the morning review. Commit: `docs: overnight QA report`
