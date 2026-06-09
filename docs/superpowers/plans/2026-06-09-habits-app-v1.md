@@ -192,9 +192,9 @@ export { pool };
 - Create: `server/src/app.ts`, `server/src/index.ts`, `server/src/auth/routes.ts`, `server/src/auth/middleware.ts`, `server/src/errors.ts`
 - Test: `server/test/auth.test.ts`
 
-- [ ] **Step 1: Failing tests** — supertest against `createApp()`: `POST /api/auth/login` with bad creds → 401 envelope; good creds → 200 `{id,name}` + httpOnly cookie (Max-Age present only when `rememberMe: true`); `GET /api/auth/me` without cookie → 401, with cookie → 200; `POST /api/auth/logout` clears cookie. Run: `npm run test -w server` → FAIL (modules missing).
+- [x] **Step 1: Failing tests** — supertest against `createApp()`: `POST /api/auth/login` with bad creds → 401 envelope; good creds → 200 `{id,name}` + httpOnly cookie (Max-Age present only when `rememberMe: true`); `GET /api/auth/me` without cookie → 401, with cookie → 200; `POST /api/auth/logout` clears cookie. Run: `npm run test -w server` → FAIL (modules missing).
 
-- [ ] **Step 2: Implement**
+- [x] **Step 2: Implement**
 
 ```ts
 // server/src/auth/middleware.ts
@@ -218,7 +218,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 
 `auth/routes.ts`: zod-validate `{name, password, rememberMe?}`; bcrypt compare; sign `{sub: user.id}` 30d; `res.cookie('token', t, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV==='production', ...(rememberMe ? { maxAge: 30*24*3600*1000 } : {}) })`. `app.ts` exports `createApp()` wiring `express.json()`, `cookie-parser`, `/api/auth`, `GET /api/healthz → {ok:true}`, central error handler from `errors.ts` (an `HttpError` class with `code`/`status`). `index.ts` calls `createApp().listen(PORT)`.
 
-- [ ] **Step 3: Tests green** — `npm run test -w server` → PASS. Commit: `feat(server): auth with httpOnly JWT cookie`
+- [x] **Step 3: Tests green** — `npm run test -w server` → PASS. Commit: `feat(server): auth with httpOnly JWT cookie`
 
 ### Task 3: Web shell — login, tab layout, auth guard
 
