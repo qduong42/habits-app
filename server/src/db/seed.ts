@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
+import { and, eq, isNull } from 'drizzle-orm';
 import { db, pool } from './client.js';
-import { users } from './schema.js';
+import { categories, users } from './schema.js';
 
 const password = process.env.SEED_PASSWORD ?? 'changeme123';
 const passwordHash = await bcrypt.hash(password, 10);
@@ -13,4 +14,25 @@ for (const name of ['huy', 'lea']) {
 }
 
 console.log('seeded users: huy, lea');
+
+// Builtin preset categories (userId null). The categories table has no unique
+// constraint on name, so idempotency is explicit: only insert each builtin if
+// no row with userId IS NULL and that name exists yet.
+const builtinCategories = [
+  { name: 'Fitness', emoji: '💪', color: '#2e7d32' },
+  { name: 'Mental Health', emoji: '🧠', color: '#5e35b1' },
+  { name: 'Sleep', emoji: '😴', color: '#1565c0' },
+];
+
+for (const preset of builtinCategories) {
+  const existing = await db
+    .select({ id: categories.id })
+    .from(categories)
+    .where(and(isNull(categories.userId), eq(categories.name, preset.name)));
+  if (existing.length === 0) {
+    await db.insert(categories).values({ ...preset, userId: null });
+  }
+}
+
+console.log('seeded builtin categories: Fitness, Mental Health, Sleep');
 await pool.end();

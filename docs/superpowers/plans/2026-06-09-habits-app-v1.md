@@ -248,7 +248,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 - Modify: `server/src/db/schema.ts`, `server/src/db/seed.ts`
 - Test: extend `server/test/db.test.ts`
 
-- [ ] **Step 1: Schema additions**
+- [x] **Step 1: Schema additions**
 
 ```ts
 export const categories = pgTable('categories', {
@@ -283,9 +283,9 @@ export const checkins = pgTable('checkins', {
 
 (import `date`, `unique` from pg-core)
 
-- [ ] **Step 2: Seed presets** — idempotent insert of builtin categories (userId null): 💪 Fitness `#2e7d32`, 🧠 Mental Health `#5e35b1`, 😴 Sleep `#1565c0`. Generate + run migration against dev db; test setup migrates test db automatically.
+- [x] **Step 2: Seed presets** — idempotent insert of builtin categories (userId null): 💪 Fitness `#2e7d32`, 🧠 Mental Health `#5e35b1`, 😴 Sleep `#1565c0`. Generate + run migration against dev db; test setup migrates test db automatically.
 
-- [ ] **Step 3: Roundtrip test green, commit** — `feat(server): categories/habits/checkins schema + preset categories`
+- [x] **Step 3: Roundtrip test green, commit** — `feat(server): categories/habits/checkins schema + preset categories`
 
 ### Task 5: `localDate` util (TDD)
 
