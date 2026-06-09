@@ -402,7 +402,7 @@ test('checkinXp: base 10, +25 bonus when completing the day', () => {
 **Files:**
 - Create: `server/src/game/streaks.ts`; Test: `server/test/streaks.test.ts`
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
 
 ```ts
 import { dailyStreak, weeklyStreak, dayStreak } from '../src/game/streaks.js';
@@ -430,7 +430,7 @@ test('dayStreak', () => {
 });
 ```
 
-- [ ] **Step 2: Implement + green + commit** — `feat(server): streak computation`. (`prevIsoWeek` ALREADY EXISTS in `dates.ts` since Task 5 — note: `prevIsoWeek('2026-W01') === '2025-W52'`, 2025 has only 52 ISO weeks; the original '2025-W53' here was wrong.)
+- [x] **Step 2: Implement + green + commit** — `feat(server): streak computation`. (`prevIsoWeek` ALREADY EXISTS in `dates.ts` since Task 5 — note: `prevIsoWeek('2026-W01') === '2025-W52'`, 2025 has only 52 ISO weeks; the original '2025-W53' here was wrong.)
 
 ### Task 12: Achievements catalog + checker (TDD)
 
