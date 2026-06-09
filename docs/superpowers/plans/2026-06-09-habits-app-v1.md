@@ -149,7 +149,7 @@ volumes:
 - Create: `server/src/db/schema.ts`, `server/src/db/client.ts`, `server/src/db/migrate.ts`, `server/src/db/seed.ts`, `server/drizzle.config.ts`
 - Test: `server/test/setup.ts` (global setup creating `habits_test` + running migrations)
 
-- [ ] **Step 1: Schema (users only for now)**
+- [x] **Step 1: Schema (users only for now)**
 
 ```ts
 // server/src/db/schema.ts
@@ -180,11 +180,11 @@ export { pool };
 
 `drizzle.config.ts`: dialect postgresql, schema `./src/db/schema.ts`, out `./drizzle`, url from `DATABASE_URL`.
 
-- [ ] **Step 2: Test setup** — `server/test/setup.ts` (vitest `globalSetup`): connect to `postgres` admin db, `CREATE DATABASE habits_test` if missing, then run drizzle `migrate()` against `habits_test`. Point tests at it: in `vitest.config.ts` set `env: { DATABASE_URL: 'postgres://habits:habits@localhost:5433/habits_test', JWT_SECRET: 'test-secret' }`.
+- [x] **Step 2: Test setup** — `server/test/setup.ts` (vitest `globalSetup`): connect to `postgres` admin db, `CREATE DATABASE habits_test` if missing, then run drizzle `migrate()` against `habits_test`. Point tests at it: in `vitest.config.ts` set `env: { DATABASE_URL: 'postgres://habits:habits@localhost:5433/habits_test', JWT_SECRET: 'test-secret' }`.
 
-- [ ] **Step 3: Migrate + seed** — `migrate.ts` runs drizzle migrator. `seed.ts` upserts users `huy` and `lea` with bcrypt hash of env `SEED_PASSWORD` (default `changeme123`), and is idempotent. Run `npm run db:generate -w server && npm run db:migrate -w server && npm run db:seed -w server`.
+- [x] **Step 3: Migrate + seed** — `migrate.ts` runs drizzle migrator. `seed.ts` upserts users `huy` and `lea` with bcrypt hash of env `SEED_PASSWORD` (default `changeme123`), and is idempotent. Run `npm run db:generate -w server && npm run db:migrate -w server && npm run db:seed -w server`.
 
-- [ ] **Step 4: Smoke test** — `server/test/db.test.ts`: insert+select a user row, expect roundtrip. Run `npm run test -w server`, expect PASS. Commit: `feat(server): drizzle schema, migrations, seed users`
+- [x] **Step 4: Smoke test** — `server/test/db.test.ts`: insert+select a user row, expect roundtrip. Run `npm run test -w server`, expect PASS. Commit: `feat(server): drizzle schema, migrations, seed users`
 
 ### Task 2: Express app + auth (login/logout/me)
 
