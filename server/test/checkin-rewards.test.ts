@@ -317,6 +317,26 @@ describe('check-in rewards transaction', () => {
       expect(await xpOf(u.id)).toBe(10);
     });
 
+    it('archived habit → 400 archived, no refund (kills the checkin→archive→undo exploit)', async () => {
+      const u = await makeUser();
+      const habitId = await createHabit(u.cookie, {
+        name: 'Archive then undo',
+        categoryId: u.categoryId,
+        frequencyType: 'daily',
+      });
+      await checkin(u.cookie, habitId); // +35
+      expect(await xpOf(u.id)).toBe(35);
+      const archived = await request(app)
+        .post(`/api/habits/${habitId}/archive`)
+        .set('Cookie', u.cookie);
+      expect(archived.status).toBe(200);
+
+      const res = await undo(u.cookie, habitId);
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('archived');
+      expect(await xpOf(u.id)).toBe(35); // unchanged — nothing was refunded
+    });
+
     it('xpTotal is floored at 0 defensively', async () => {
       const u = await makeUser();
       const habitId = await createHabit(u.cookie, {
@@ -329,6 +349,67 @@ describe('check-in rewards transaction', () => {
 
       const res = await undo(u.cookie, habitId);
       expect(res.body).toEqual({ ok: true, xpLost: 35, xpTotal: 0, level: 1 });
+    });
+  });
+
+  describe('concurrency: same-user reward transactions are serialized by the row lock', () => {
+    it('two parallel check-ins → exactly one earns the 25-point day bonus', async () => {
+      const u = await makeUser();
+      const h1 = await createHabit(u.cookie, {
+        name: 'Race one',
+        categoryId: u.categoryId,
+        frequencyType: 'daily',
+      });
+      const h2 = await createHabit(u.cookie, {
+        name: 'Race two',
+        categoryId: u.categoryId,
+        frequencyType: 'daily',
+      });
+
+      const [r1, r2] = await Promise.all([checkin(u.cookie, h1), checkin(u.cookie, h2)]);
+      expect(r1.status).toBe(200);
+      expect(r2.status).toBe(200);
+
+      // The FOR UPDATE lock serializes the two transactions: the second one
+      // sees the first one's insert, so exactly one observes the completed
+      // day. Without the lock both could gain 10 (or both 35).
+      const gains = [r1.body.xpGained, r2.body.xpGained].sort((a, b) => a - b);
+      expect(gains).toEqual([10, 35]);
+      expect(r1.body.xpGained + r2.body.xpGained).toBe(45);
+      expect(await xpOf(u.id)).toBe(45);
+
+      // first-checkin unlocks exactly once across the pair
+      const unlocked = [...r1.body.unlockedAchievements, ...r2.body.unlockedAchievements];
+      expect(unlocked.map((a: { id: string }) => a.id)).toEqual(['first-checkin']);
+    });
+
+    it('two parallel undos → bonus charged once, xp lands exactly at 0', async () => {
+      const u = await makeUser();
+      const h1 = await createHabit(u.cookie, {
+        name: 'Undo race one',
+        categoryId: u.categoryId,
+        frequencyType: 'daily',
+      });
+      const h2 = await createHabit(u.cookie, {
+        name: 'Undo race two',
+        categoryId: u.categoryId,
+        frequencyType: 'daily',
+      });
+      await checkin(u.cookie, h1);
+      await checkin(u.cookie, h2);
+      expect(await xpOf(u.id)).toBe(45);
+
+      const [r1, r2] = await Promise.all([undo(u.cookie, h1), undo(u.cookie, h2)]);
+      expect(r1.status).toBe(200);
+      expect(r2.status).toBe(200);
+
+      // Serialized by the row lock: the first undo breaks the complete day
+      // (10 + 25), the second only loses its base 10. Without the lock both
+      // could see "was complete, now broken" and charge the bonus twice.
+      const losses = [r1.body.xpLost, r2.body.xpLost].sort((a, b) => a - b);
+      expect(losses).toEqual([10, 35]);
+      expect(r1.body.xpLost + r2.body.xpLost).toBe(45);
+      expect(await xpOf(u.id)).toBe(0);
     });
   });
 });

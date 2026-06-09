@@ -294,6 +294,12 @@ export interface CheckinResult {
  */
 export interface UndoResult {
   ok: true;
+  /**
+   * What the undo charged for. NOTE: when the GREATEST(…, 0) floor in
+   * adjustXp clamps, `xpLost` may exceed the amount actually deducted —
+   * clients must trust `xpTotal` as the new balance, never compute
+   * `previous - xpLost`.
+   */
   xpLost: number;
   xpTotal: number;
   level: number;
@@ -315,6 +321,30 @@ async function userTodayFor(tx: Tx, userId: string): Promise<string> {
     .where(eq(users.id, userId));
   if (!user) throw new HttpError(401, 'unauthenticated', 'Invalid session');
   return localDateFor(user.timezone);
+}
+
+/**
+ * Acquire the user's row lock (SELECT ... FOR UPDATE) for the rest of the
+ * transaction. MUST run before loadRewardState in every reward transaction.
+ *
+ * This lock is load-bearing: it serializes same-user reward transactions so
+ * loadRewardState always sees the prior transaction's inserts/deletes. It
+ * guarantees:
+ * - day-bonus correctness (two parallel check-ins can't both observe an
+ *   "incomplete day minus me" snapshot and both award — or both skip — the
+ *   25-point bonus);
+ * - totalCheckins achievement thresholds are evaluated against a serialized
+ *   count, so threshold crossings fire exactly once;
+ * - undo can't double-charge the 25-point day bonus when two undos race;
+ * - the userAchievements PK can't be hit by two transactions inserting the
+ *   same badge (the conflict-safe insert below is belt-and-braces only).
+ */
+async function lockUserRow(tx: Tx, userId: string): Promise<void> {
+  await tx
+    .select({ xpTotal: users.xpTotal })
+    .from(users)
+    .where(eq(users.id, userId))
+    .for('update');
 }
 
 interface RewardState {
@@ -386,6 +416,8 @@ async function adjustXp(tx: Tx, userId: string, delta: number): Promise<number> 
 export async function checkinHabit(userId: string, habitId: string): Promise<CheckinResult> {
   try {
     return await db.transaction(async (tx) => {
+      // Row lock FIRST — see lockUserRow for why this ordering matters.
+      await lockUserRow(tx, userId);
       const habit = await ownedHabit(tx, userId, habitId);
       if (habit.archivedAt !== null) {
         throw new HttpError(400, 'archived', 'Cannot check in an archived habit');
@@ -428,28 +460,33 @@ export async function checkinHabit(userId: string, habitId: string): Promise<Che
 
       let unlockedAchievements: UnlockedAchievement[] = [];
       if (newIds.length > 0) {
+        // Belt-and-braces: the row lock above already serializes same-user
+        // transactions, but should an unlock ever race anyway, the loser hits
+        // the conflict, inserts nothing, and (building the response from the
+        // RETURNED rows only) reports no duplicate unlock.
         const inserted = await tx
           .insert(userAchievements)
           .values(newIds.map((achievementId) => ({ userId, achievementId })))
+          .onConflictDoNothing()
           .returning();
-        const unlockedAt = new Map(
-          inserted.map((r) => [r.achievementId, r.unlockedAt.toISOString()]),
-        );
-        const defs = await tx
-          .select()
-          .from(achievements)
-          .where(inArray(achievements.id, newIds));
-        const defById = new Map(defs.map((d) => [d.id, d]));
-        unlockedAchievements = newIds.map((id) => {
-          const def = defById.get(id)!; // FK guarantees the catalog row exists
-          return {
-            id,
-            name: def.name,
-            description: def.description,
-            emoji: def.emoji,
-            unlockedAt: unlockedAt.get(id)!,
-          };
-        });
+        if (inserted.length > 0) {
+          const insertedIds = inserted.map((r) => r.achievementId);
+          const defs = await tx
+            .select()
+            .from(achievements)
+            .where(inArray(achievements.id, insertedIds));
+          const defById = new Map(defs.map((d) => [d.id, d]));
+          unlockedAchievements = inserted.map((r) => {
+            const def = defById.get(r.achievementId)!; // FK guarantees the catalog row exists
+            return {
+              id: r.achievementId,
+              name: def.name,
+              description: def.description,
+              emoji: def.emoji,
+              unlockedAt: r.unlockedAt.toISOString(),
+            };
+          });
+        }
       }
 
       return { xpGained, xpTotal, level, leveledUp, habitStreak, unlockedAchievements };
@@ -471,12 +508,28 @@ export async function checkinHabit(userId: string, habitId: string): Promise<Che
  */
 export async function undoCheckin(userId: string, habitId: string): Promise<UndoResult> {
   return db.transaction(async (tx) => {
-    await ownedHabit(tx, userId, habitId);
+    // Row lock FIRST — see lockUserRow for why this ordering matters.
+    await lockUserRow(tx, userId);
+    const habit = await ownedHabit(tx, userId, habitId);
+    if (habit.archivedAt !== null) {
+      // Mirrors checkinHabit: without this, checkin → archive → undo would
+      // refund a check-in that the user can never re-earn (-then-re-earn) and
+      // exploit the day-bonus math.
+      throw new HttpError(400, 'archived', 'Cannot undo a check-in on an archived habit');
+    }
     const today = await userTodayFor(tx, userId);
 
+    // userId predicate is defense-in-depth: ownedHabit already proved
+    // ownership, but the delete must never touch another user's rows.
     const deleted = await tx
       .delete(checkins)
-      .where(and(eq(checkins.habitId, habitId), eq(checkins.localDate, today)))
+      .where(
+        and(
+          eq(checkins.habitId, habitId),
+          eq(checkins.userId, userId),
+          eq(checkins.localDate, today),
+        ),
+      )
       .returning({ id: checkins.id });
     if (deleted.length === 0) {
       throw new HttpError(404, 'not_found', 'No check-in today to undo');
