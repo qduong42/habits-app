@@ -430,7 +430,7 @@ test('dayStreak', () => {
 });
 ```
 
-- [ ] **Step 2: Implement + green + commit** — `feat(server): streak computation`. (`weeklyStreak` needs `prevIsoWeek(week)` — add it to `dates.ts` with a test: `prevIsoWeek('2026-W01') === '2025-W53'`.)
+- [ ] **Step 2: Implement + green + commit** — `feat(server): streak computation`. (`prevIsoWeek` ALREADY EXISTS in `dates.ts` since Task 5 — note: `prevIsoWeek('2026-W01') === '2025-W52'`, 2025 has only 52 ISO weeks; the original '2025-W53' here was wrong.)
 
 ### Task 12: Achievements catalog + checker (TDD)
 
