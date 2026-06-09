@@ -4,6 +4,7 @@
     "moduleResolution": "NodeNext",
     "target": "ES2022",
     "strict": true,
+    "skipLibCheck": true,
     "outDir": "dist"
   },
   "include": ["src", "test", "vitest.config.ts", "drizzle.config.ts"]
