@@ -6,7 +6,7 @@
 
 **Architecture:** npm workspaces monorepo: `server/` (Express + TypeScript + Drizzle + Postgres) and `web/` (React + Vite + TypeScript PWA). Gamification is pure functions in `server/src/game/` (no I/O). Express serves the built frontend in production; Docker Compose runs Postgres (and later the API).
 
-**Tech Stack:** Node 20+, Express 4, Drizzle ORM + pg, bcryptjs, jsonwebtoken, zod, node-schedule, web-push, vitest + supertest; React 18, react-router-dom 6, @tanstack/react-query 5, Vite 5.
+**Tech Stack (as actually installed in Task 0):** Node 20+, **Express 5.2**, Drizzle ORM 0.45 + pg, bcryptjs 3 (bundled types), jsonwebtoken, **zod 4**, node-schedule, web-push, vitest 4 + supertest; **React 19**, **react-router-dom 7**, @tanstack/react-query 5, **Vite 8**, **TypeScript 6**.
 
 ---
 
@@ -19,7 +19,9 @@
 5. Work on branch `feat/habits-app-v1`. NEVER push to `master`/`main`. NEVER force-push.
 6. Do not edit the spec. Do not start the next task. Do not refactor other tasks' code (Task 23 does that).
 7. If genuinely blocked (missing tool, broken environment), write the reason to `docs/superpowers/ralph/BLOCKED.md` and stop — the loop runner halts on that file.
-8. Postgres for dev/tests runs via `docker compose up -d postgres` (Task 0 creates the compose file). Tests use database `habits_test`, dev uses `habits`.
+8. Postgres for dev/tests runs via `docker compose up -d --wait postgres` (healthchecked). Tests use database `habits_test`, dev uses `habits`.
+9. **Version idioms** (majors are newer than this plan's snippets — adapt): Express **5** (async errors auto-forward to the error middleware; `req.query` immutable; wildcard routes are `/*splat` not `*`), zod **4** (`error.issues`, top-level `z.email()` etc.), react-router **7** (`createHashRouter` still fine), react-query **5** (object-form `useQuery({queryKey, queryFn})`), TS **6** (strict by default in web).
+10. **`.env` files cannot be created by agents** (harness denies all `.env*` writes). Code must fall back to dev defaults when env vars are absent: `DATABASE_URL ?? 'postgres://habits:habits@localhost:5433/habits'`, `JWT_SECRET ?? 'dev-secret-change-me'`, `PORT ?? 3001`. Keep `.env` support for production.
 
 ## Shared API contracts (single source of truth — do not drift)
 
