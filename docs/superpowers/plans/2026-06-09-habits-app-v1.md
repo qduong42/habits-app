@@ -325,11 +325,11 @@ test('isoWeekOf returns ISO year-week', () => {
 - Modify: `server/src/app.ts`
 - Test: `server/test/habits.test.ts`
 
-- [ ] **Step 1: Failing integration tests** — login helper returns cookie; create habit (daily + weekly w/ target 3); `GET /api/habits` matches the **shared contract** (`scheduledToday`, `doneToday:false`, `weekCount:0`, `streak:0`, `today` = localDate in user TZ); PATCH renames / changes frequency; archive removes it from GET; DELETE removes row; another user's habit → 404; weekly without `weeklyTarget` → 400.
+- [x] **Step 1: Failing integration tests** — login helper returns cookie; create habit (daily + weekly w/ target 3); `GET /api/habits` matches the **shared contract** (`scheduledToday`, `doneToday:false`, `weekCount:0`, `streak:0`, `today` = localDate in user TZ); PATCH renames / changes frequency; archive removes it from GET; DELETE removes row; another user's habit → 404; weekly without `weeklyTarget` → 400.
 
-- [ ] **Step 2: Implement** — zod schemas; `service.ts` builds the contract object: one query for active habits + categories, one for today's checkins, one for this-ISO-week checkin counts per habit. `scheduledToday` rule from contract comment. Wire `/api/habits` with `requireAuth`.
+- [x] **Step 2: Implement** — zod schemas; `service.ts` builds the contract object: one query for active habits + categories, one for today's checkins, one for this-ISO-week checkin counts per habit. `scheduledToday` rule from contract comment. Wire `/api/habits` with `requireAuth`.
 
-- [ ] **Step 3: Green + commit** — `feat(server): habits CRUD with today status`
+- [x] **Step 3: Green + commit** — `feat(server): habits CRUD with today status`
 
 ### Task 7: Check-in / undo endpoints (no XP yet)
 
