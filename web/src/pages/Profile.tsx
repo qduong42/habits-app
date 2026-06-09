@@ -1,4 +1,4 @@
-import { useMe } from '../auth';
+import { useMe } from '../useMe';
 
 // Placeholder — achievements gallery and settings arrive in Tasks 14 and 19.
 export default function Profile() {

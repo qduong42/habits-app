@@ -41,5 +41,8 @@ export async function apiFetch<T = unknown>(path: string, opts: RequestInit = {}
     throw new ApiError(code, message, res.status);
   }
 
-  return (await res.json()) as T;
+  if (res.status === 204) return undefined as T;
+  const text = await res.text();
+  if (!text) return undefined as T;
+  return JSON.parse(text) as T;
 }

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiFetch, ApiError } from '../api';
+import type { Me } from '../useMe';
 
 export default function Login() {
   const [name, setName] = useState('');
@@ -17,11 +18,11 @@ export default function Login() {
     setError(null);
     setSubmitting(true);
     try {
-      await apiFetch('/auth/login', {
+      const user = await apiFetch<Me>('/auth/login', {
         method: 'POST',
         body: JSON.stringify({ name, password, rememberMe }),
       });
-      await queryClient.invalidateQueries({ queryKey: ['me'] });
+      queryClient.setQueryData(['me'], user);
       navigate('/');
     } catch (err) {
       if (err instanceof ApiError && err.code === 'invalid_credentials') {

@@ -53,7 +53,9 @@ body {
 
 .content {
   flex: 1;
-  padding: 16px 16px 80px; /* bottom padding clears the fixed tab bar */
+  padding: 16px;
+  /* bottom padding clears the fixed tab bar plus any device safe area */
+  padding-bottom: calc(80px + env(safe-area-inset-bottom));
 }
 
 .tab-bar {
