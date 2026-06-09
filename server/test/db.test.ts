@@ -1,6 +1,6 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { db, pool } from '../src/db/client.js';
+import { db } from '../src/db/client.js';
 import { users } from '../src/db/schema.js';
 
 const TEST_NAME = 'db-smoke-test-user';
@@ -8,7 +8,6 @@ const TEST_NAME = 'db-smoke-test-user';
 describe('db smoke test', () => {
   afterAll(async () => {
     await db.delete(users).where(eq(users.name, TEST_NAME));
-    await pool.end();
   });
 
   it('inserts and selects a user roundtrip', async () => {
