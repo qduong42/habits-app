@@ -16,8 +16,12 @@ export function createApp() {
 
   app.use('/api/auth', authRouter);
 
+  // Mount all /api routers above this JSON 404 catch-all.
+  app.use('/api', (_req, _res, next) => next(new HttpError(404, 'not_found', 'Not found')));
+
   // Central error handler (Express 5 forwards async route errors here automatically).
-  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
+    if (res.headersSent) return next(err);
     if (err instanceof HttpError) {
       res.status(err.status).json({ error: { code: err.code, message: err.message } });
       return;

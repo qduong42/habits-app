@@ -38,7 +38,7 @@ describe('auth', () => {
         .send({ name: TEST_NAME, password: 'wrong-password' });
 
       expect(res.status).toBe(401);
-      expect(res.body.error.code).toBeTypeOf('string');
+      expect(res.body.error.code).toBe('invalid_credentials');
       expect(res.body.error.message).toBeTypeOf('string');
       expect(cookieHeader(res)).toEqual([]);
     });
@@ -49,14 +49,14 @@ describe('auth', () => {
         .send({ name: 'no-such-user-anywhere', password: 'whatever' });
 
       expect(res.status).toBe(401);
-      expect(res.body.error.code).toBeTypeOf('string');
+      expect(res.body.error.code).toBe('invalid_credentials');
     });
 
     it('rejects invalid body with 400 error envelope', async () => {
       const res = await request(app).post('/api/auth/login').send({ name: TEST_NAME });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.code).toBeTypeOf('string');
+      expect(res.body.error.code).toBe('validation');
       expect(res.body.error.message).toBeTypeOf('string');
     });
 
@@ -94,7 +94,7 @@ describe('auth', () => {
       const res = await request(app).get('/api/auth/me');
 
       expect(res.status).toBe(401);
-      expect(res.body.error.code).toBeTypeOf('string');
+      expect(res.body.error.code).toBe('unauthenticated');
       expect(res.body.error.message).toBeTypeOf('string');
     });
 
@@ -104,7 +104,7 @@ describe('auth', () => {
         .set('Cookie', 'token=not-a-jwt');
 
       expect(res.status).toBe(401);
-      expect(res.body.error.code).toBeTypeOf('string');
+      expect(res.body.error.code).toBe('unauthenticated');
     });
 
     it('returns {id,name} with a valid login cookie', async () => {
@@ -138,6 +138,14 @@ describe('auth', () => {
       // the cleared cookie no longer authenticates
       const me = await request(app).get('/api/auth/me').set('Cookie', 'token=');
       expect(me.status).toBe(401);
+    });
+  });
+
+  describe('unknown /api route', () => {
+    it('returns a JSON 404 envelope', async () => {
+      const res = await request(app).get('/api/nope');
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('not_found');
     });
   });
 

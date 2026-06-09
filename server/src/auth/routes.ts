@@ -10,6 +10,10 @@ import { JWT_SECRET, requireAuth, type AuthedRequest } from './middleware.js';
 
 const THIRTY_DAYS_MS = 30 * 24 * 3600 * 1000;
 
+// Compared against when the user doesn't exist, so login takes the same time
+// for unknown names as for wrong passwords (prevents timing-based enumeration).
+const DUMMY_HASH = bcrypt.hashSync('dummy-password', 10);
+
 const cookieOptions = {
   httpOnly: true,
   sameSite: 'lax',
@@ -36,7 +40,11 @@ authRouter.post('/login', async (req, res) => {
   const { name, password, rememberMe } = parsed.data;
 
   const [user] = await db.select().from(users).where(eq(users.name, name));
-  if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+  if (!user) {
+    await bcrypt.compare(password, DUMMY_HASH);
+    throw new HttpError(401, 'invalid_credentials', 'Invalid name or password');
+  }
+  if (!(await bcrypt.compare(password, user.passwordHash))) {
     throw new HttpError(401, 'invalid_credentials', 'Invalid name or password');
   }
 
