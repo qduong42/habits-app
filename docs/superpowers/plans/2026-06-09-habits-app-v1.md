@@ -377,7 +377,7 @@ test('isoWeekOf returns ISO year-week', () => {
 **Files:**
 - Create: `server/src/game/xp.ts`; Test: `server/test/xp.test.ts`
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
 
 ```ts
 import { levelFromXp, levelProgress, checkinXp } from '../src/game/xp.js';
@@ -395,7 +395,7 @@ test('checkinXp: base 10, +25 bonus when completing the day', () => {
 });
 ```
 
-- [ ] **Step 2: Implement + green + commit** — `feat(server): xp and level functions`
+- [x] **Step 2: Implement + green + commit** — `feat(server): xp and level functions`
 
 ### Task 11: Streak pure functions (TDD)
 
