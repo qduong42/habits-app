@@ -491,7 +491,9 @@ test('awards thresholds crossed and skips already-unlocked', () => {
 
 - [ ] **Step 3: Profile gallery** — `GET /api/achievements` (add tiny route returning catalog LEFT JOIN user unlocks → contract shape) — grid of badges, locked ones grayed with 🔒 and description.
 
-- [ ] **Step 4: Verify + manual + commit** — `feat(web): xp bar, celebration modals, achievements gallery`
+- [ ] **Step 4: Carry-over fixes from Task 9 review** — (a) HabitForm sheet: explicit Cancel button + Escape-to-close + `aria-modal`; (b) `useCheckin`: shared `mutationKey: ['checkin']` and only invalidate in `onSettled` when it's the last in-flight checkin mutation (`queryClient.isMutating({mutationKey:['checkin']}) === 1`) to stop double-tap flicker.
+
+- [ ] **Step 5: Verify + manual + commit** — `feat(web): xp bar, celebration modals, achievements gallery`
 
 **Slice 2 demo:** checking off habits feels like a game — XP pops, levels, badges.
 
