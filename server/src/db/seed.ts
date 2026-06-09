@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { db, pool } from './client.js';
 import { achievements, categories, users } from './schema.js';
 import { ACHIEVEMENT_CATALOG } from '../game/achievements.js';
@@ -37,7 +37,8 @@ for (const preset of builtinCategories) {
 
 console.log('seeded builtin categories: Fitness, Mental Health, Sleep');
 
-// Achievement catalog (text PK = slug, so onConflictDoNothing is idempotent).
+// Achievement catalog (text PK = slug). Upsert name/description/emoji so
+// catalog copy edits propagate to existing DBs on re-seed.
 await db
   .insert(achievements)
   .values(
@@ -48,7 +49,14 @@ await db
       emoji,
     })),
   )
-  .onConflictDoNothing();
+  .onConflictDoUpdate({
+    target: achievements.id,
+    set: {
+      name: sql`excluded.name`,
+      description: sql`excluded.description`,
+      emoji: sql`excluded.emoji`,
+    },
+  });
 
 console.log(`seeded achievements catalog: ${ACHIEVEMENT_CATALOG.length}`);
 await pool.end();

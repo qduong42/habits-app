@@ -2,7 +2,7 @@
 // Category select offers an inline "+ New category" mode that POSTs to
 // /categories and selects the result.
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import {
   useCategories,
   useCreateCategory,
@@ -31,6 +31,15 @@ export default function HabitForm({ habit, onClose }: HabitFormProps) {
   );
   const [weeklyTarget, setWeeklyTarget] = useState(habit?.weeklyTarget ?? 3);
   const [notes, setNotes] = useState(habit?.notes ?? '');
+
+  // Escape closes the sheet (carry-over a11y fix from Task 9 review).
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
 
   // Inline new-category mode.
   const [newCatName, setNewCatName] = useState('');
@@ -95,6 +104,7 @@ export default function HabitForm({ habit, onClose }: HabitFormProps) {
       <div
         className="sheet"
         role="dialog"
+        aria-modal="true"
         aria-label={habit ? 'Edit habit' : 'New habit'}
         onClick={(e) => e.stopPropagation()}
       >
@@ -217,13 +227,18 @@ export default function HabitForm({ habit, onClose }: HabitFormProps) {
 
           {error && <p className="form-error">{error.message}</p>}
 
-          <button
-            type="submit"
-            className="btn-primary"
-            disabled={saving || newCategoryMode || name.trim() === '' || !effectiveCategoryId}
-          >
-            {saving ? 'Saving…' : habit ? 'Save changes' : 'Create habit'}
-          </button>
+          <div className="sheet-actions">
+            <button type="button" className="btn-secondary" onClick={onClose}>
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={saving || newCategoryMode || name.trim() === '' || !effectiveCategoryId}
+            >
+              {saving ? 'Saving…' : habit ? 'Save changes' : 'Create habit'}
+            </button>
+          </div>
         </form>
       </div>
     </div>

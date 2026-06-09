@@ -485,15 +485,15 @@ test('awards thresholds crossed and skips already-unlocked', () => {
 - Create: `web/src/components/Celebration.tsx`, `web/src/components/Toast.tsx`
 - Modify: `web/src/pages/Today.tsx`, `web/src/pages/Profile.tsx`, `web/src/hooks/useHabits.ts`, `web/src/api.ts`
 
-- [ ] **Step 1: Wire responses** — `useCheckin` returns the rewards payload; keep latest `xpTotal`/`level` in a small context (`GameContext`) feeding `XpBar`; streak flame updates from response.
+- [x] **Step 1: Wire responses** — `useCheckin` returns the rewards payload; keep latest `xpTotal`/`level` in a small context (`GameContext`) feeding `XpBar`; streak flame updates from response.
 
-- [ ] **Step 2: Feedback** — `+10 XP` / `+35 XP` toast near the tapped row; `Celebration` modal (CSS-only confetti burst, no library) when `leveledUp` or `unlockedAchievements.length > 0`, listing badge emoji + name; auto-dismiss 2.5s or tap.
+- [x] **Step 2: Feedback** — `+10 XP` / `+35 XP` toast near the tapped row; `Celebration` modal (CSS-only confetti burst, no library) when `leveledUp` or `unlockedAchievements.length > 0`, listing badge emoji + name; auto-dismiss 2.5s or tap.
 
-- [ ] **Step 3: Profile gallery** — `GET /api/achievements` (add tiny route returning catalog LEFT JOIN user unlocks → contract shape) — grid of badges, locked ones grayed with 🔒 and description. Carry-over from Task 12 review: change the seed's achievements insert to `onConflictDoUpdate` (upsert name/description/emoji on slug PK) so catalog copy edits propagate to existing DBs.
+- [x] **Step 3: Profile gallery** — `GET /api/achievements` (add tiny route returning catalog LEFT JOIN user unlocks → contract shape) — grid of badges, locked ones grayed with 🔒 and description. Carry-over from Task 12 review: change the seed's achievements insert to `onConflictDoUpdate` (upsert name/description/emoji on slug PK) so catalog copy edits propagate to existing DBs.
 
-- [ ] **Step 4: Carry-over fixes from Task 9 review** — (a) HabitForm sheet: explicit Cancel button + Escape-to-close + `aria-modal`; (b) `useCheckin`: shared `mutationKey: ['checkin']` and only invalidate in `onSettled` when it's the last in-flight checkin mutation (`queryClient.isMutating({mutationKey:['checkin']}) === 1`) to stop double-tap flicker.
+- [x] **Step 4: Carry-over fixes from Task 9 review** — (a) HabitForm sheet: explicit Cancel button + Escape-to-close + `aria-modal`; (b) `useCheckin`: shared `mutationKey: ['checkin']` and only invalidate in `onSettled` when it's the last in-flight checkin mutation (`queryClient.isMutating({mutationKey:['checkin']}) === 1`) to stop double-tap flicker.
 
-- [ ] **Step 5: Verify + manual + commit** — `feat(web): xp bar, celebration modals, achievements gallery`
+- [x] **Step 5: Verify + manual + commit** — `feat(web): xp bar, celebration modals, achievements gallery`
 
 **Slice 2 demo:** checking off habits feels like a game — XP pops, levels, badges.
 

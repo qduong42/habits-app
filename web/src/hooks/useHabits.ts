@@ -5,6 +5,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, apiFetch } from '../api';
+import { useGame } from './useGame';
 import type {
   Category,
   CategoryInput,
@@ -13,6 +14,7 @@ import type {
   HabitInput,
   HabitPatch,
   HabitsResponse,
+  UndoResponse,
 } from '../types';
 
 export function useHabits() {
@@ -39,16 +41,20 @@ interface CheckinContext {
   previous: HabitsResponse | undefined;
 }
 
+/** Discriminate with `'xpGained' in result` (check-in) vs undo. */
+export type CheckinResult = CheckinResponse | UndoResponse;
+
 export function useCheckin() {
   const queryClient = useQueryClient();
-  return useMutation<CheckinResponse | undefined, Error, CheckinVars, CheckinContext>({
-    mutationFn: async ({ habitId, done }) => {
-      if (done) {
-        return apiFetch<CheckinResponse>(`/habits/${habitId}/checkin`, { method: 'POST' });
-      }
-      await apiFetch(`/habits/${habitId}/checkin`, { method: 'DELETE' });
-      return undefined;
-    },
+  const { applyXp } = useGame();
+  return useMutation<CheckinResult, Error, CheckinVars, CheckinContext>({
+    // Shared key across all check-in/undo mutations so concurrent taps can be
+    // counted in onSettled (and so they dedupe-invalidate, see below).
+    mutationKey: ['checkin'],
+    mutationFn: ({ habitId, done }) =>
+      done
+        ? apiFetch<CheckinResponse>(`/habits/${habitId}/checkin`, { method: 'POST' })
+        : apiFetch<UndoResponse>(`/habits/${habitId}/checkin`, { method: 'DELETE' }),
     onMutate: async ({ habitId, done }) => {
       await queryClient.cancelQueries({ queryKey: ['habits'] });
       const previous = queryClient.getQueryData<HabitsResponse>(['habits']);
@@ -75,6 +81,25 @@ export function useCheckin() {
       );
       return { previous };
     },
+    // Both response shapes carry server-truth {xpTotal, level} — feed the
+    // GameContext so the XpBar tracks every check-in AND undo.
+    onSuccess: (res, { habitId }) => {
+      applyXp(res);
+      if ('habitStreak' in res) {
+        // Correct the optimistic streak guess with the server's number so the
+        // flame is right immediately (the settle-time refetch confirms it).
+        queryClient.setQueryData<HabitsResponse>(['habits'], (old) =>
+          old === undefined
+            ? undefined
+            : {
+                ...old,
+                habits: old.habits.map((h) =>
+                  h.id === habitId ? { ...h, streak: res.habitStreak } : h,
+                ),
+              },
+        );
+      }
+    },
     onError: (err, _vars, context) => {
       // 409 already_done: the habit IS done — keep the optimistic "done" state
       // and let onSettled's invalidation reconcile. Everything else (e.g. 400
@@ -84,7 +109,13 @@ export function useCheckin() {
         queryClient.setQueryData(['habits'], context.previous);
       }
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['habits'] }),
+    onSettled: () => {
+      // Only the LAST in-flight check-in mutation invalidates; earlier ones
+      // settling would refetch mid-burst and flicker optimistic rows back.
+      if (queryClient.isMutating({ mutationKey: ['checkin'] }) === 1) {
+        queryClient.invalidateQueries({ queryKey: ['habits'] });
+      }
+    },
   });
 }
 

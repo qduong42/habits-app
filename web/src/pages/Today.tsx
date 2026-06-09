@@ -2,10 +2,12 @@
 // grouped under light category headers, optimistic check circles, floating +
 // button opening the HabitForm bottom sheet, ⋯ row menu (edit/archive/delete).
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ApiError } from '../api';
+import Celebration, { type CelebrationData } from '../components/Celebration';
 import HabitForm from '../components/HabitForm';
 import HabitRow from '../components/HabitRow';
+import Toast from '../components/Toast';
 import XpBar from '../components/XpBar';
 import {
   useArchiveHabit,
@@ -15,15 +17,12 @@ import {
 } from '../hooks/useHabits';
 import type { Category, Habit } from '../types';
 
-interface XpState {
-  level: number;
-  into: number;
-  needed: number;
+/** XP chip anchored to the tapped row; `key` re-mounts it on rapid re-taps. */
+interface XpToast {
+  habitId: string;
+  text: string;
+  key: number;
 }
-
-// Session-level stopgap until Tasks 13/17 wire real XP: remember the last
-// check-in response across mounts. Task 14 replaces this with GameContext.
-let lastXp: XpState = { level: 1, into: 0, needed: 1000 };
 
 /** "2026-06-10" → "Wed, Jun 10" (parsed as plain local date, no TZ shift). */
 function formatToday(isoDate: string): string {
@@ -61,11 +60,16 @@ export default function Today() {
   const archiveHabit = useArchiveHabit();
   const deleteHabit = useDeleteHabit();
 
-  const [xp, setXp] = useState<XpState>(lastXp);
   const [formOpen, setFormOpen] = useState(false);
   const [editHabit, setEditHabit] = useState<Habit | null>(null);
   const [menuHabit, setMenuHabit] = useState<Habit | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [toast, setToast] = useState<XpToast | null>(null);
+  const [celebration, setCelebration] = useState<CelebrationData | null>(null);
+
+  // Stable callbacks so Toast/Celebration effects don't restart every render.
+  const clearToast = useCallback(() => setToast(null), []);
+  const closeCelebration = useCallback(() => setCelebration(null), []);
 
   function handleToggle(habit: Habit, done: boolean) {
     setActionError(null);
@@ -73,9 +77,15 @@ export default function Today() {
       { habitId: habit.id, done },
       {
         onSuccess: (res) => {
-          if (res) {
-            lastXp = { level: res.level, into: res.xpTotal % 1000, needed: 1000 };
-            setXp(lastXp);
+          // GameContext (XpBar) is fed by the hook; this handles the rest of
+          // the feedback. Undo responses ('xpLost') get no toast/celebration.
+          if (!('xpGained' in res)) return;
+          setToast({ habitId: habit.id, text: `+${res.xpGained} XP`, key: Date.now() });
+          if (res.leveledUp || res.unlockedAchievements.length > 0) {
+            setCelebration({
+              level: res.leveledUp ? res.level : null,
+              unlockedAchievements: res.unlockedAchievements,
+            });
           }
         },
         onError: (err) => {
@@ -116,7 +126,7 @@ export default function Today() {
         <span className="today-date">{formatToday(data.today)}</span>
       </div>
 
-      <XpBar level={xp.level} into={xp.into} needed={xp.needed} />
+      <XpBar />
 
       {actionError && <p className="form-error">{actionError}</p>}
 
@@ -140,12 +150,12 @@ export default function Today() {
                 </span>
               </div>
               {habits.map((habit) => (
-                <HabitRow
-                  key={habit.id}
-                  habit={habit}
-                  onToggle={handleToggle}
-                  onMenu={setMenuHabit}
-                />
+                <div key={habit.id} className="habit-row-wrap">
+                  <HabitRow habit={habit} onToggle={handleToggle} onMenu={setMenuHabit} />
+                  {toast?.habitId === habit.id && (
+                    <Toast key={toast.key} text={toast.text} onDone={clearToast} />
+                  )}
+                </div>
               ))}
             </section>
           );
@@ -166,6 +176,14 @@ export default function Today() {
 
       {formOpen && (
         <HabitForm habit={editHabit ?? undefined} onClose={() => setFormOpen(false)} />
+      )}
+
+      {celebration && (
+        <Celebration
+          level={celebration.level}
+          unlockedAchievements={celebration.unlockedAchievements}
+          onClose={closeCelebration}
+        />
       )}
 
       {menuHabit && (

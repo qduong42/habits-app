@@ -1,13 +1,10 @@
-// Dumb XP progress bar — gets level/into/needed from the page. Task 14 swaps
-// the data source to GameContext; this component stays as-is.
+// XP progress bar — reads level/into/needed from GameContext (server truth
+// from the latest check-in/undo response; level-1 default before any).
 
-interface XpBarProps {
-  level: number;
-  into: number;
-  needed: number;
-}
+import { useGame } from '../hooks/useGame';
 
-export default function XpBar({ level, into, needed }: XpBarProps) {
+export default function XpBar() {
+  const { level, into, needed } = useGame();
   const pct = needed > 0 ? Math.min(100, (into / needed) * 100) : 0;
   return (
     <div className="xp-bar">

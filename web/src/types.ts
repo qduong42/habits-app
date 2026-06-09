@@ -50,6 +50,17 @@ export interface CheckinResponse {
   unlockedAchievements: Achievement[];
 }
 
+/**
+ * DELETE /habits/:id/checkin. NOTE: when the server floor-clamps XP at 0,
+ * xpLost may exceed the actual deduction — always trust xpTotal/level.
+ */
+export interface UndoResponse {
+  ok: boolean;
+  xpLost: number;
+  xpTotal: number;
+  level: number;
+}
+
 /** POST /habits body. Weekly requires weeklyTarget; daily must omit it. */
 export interface HabitInput {
   name: string;

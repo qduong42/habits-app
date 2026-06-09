@@ -1,5 +1,6 @@
 import { createHashRouter, RouterProvider } from 'react-router-dom';
 import { RequireAuth } from './auth';
+import { GameProvider } from './game';
 import Layout from './Layout';
 import Login from './pages/Login';
 import Today from './pages/Today';
@@ -28,5 +29,9 @@ const router = createHashRouter([
 ]);
 
 export default function App() {
-  return <RouterProvider router={router} />;
+  return (
+    <GameProvider>
+      <RouterProvider router={router} />
+    </GameProvider>
+  );
 }
