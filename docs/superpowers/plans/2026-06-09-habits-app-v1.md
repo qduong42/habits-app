@@ -22,6 +22,7 @@
 8. Postgres for dev/tests runs via `docker compose up -d --wait postgres` (healthchecked). Tests use database `habits_test`, dev uses `habits`.
 9. **Version idioms** (majors are newer than this plan's snippets — adapt): Express **5** (async errors auto-forward to the error middleware; `req.query` immutable; wildcard routes are `/*splat` not `*`), zod **4** (`error.issues`, top-level `z.email()` etc.), react-router **7** (`createHashRouter` still fine), react-query **5** (object-form `useQuery({queryKey, queryFn})`), TS **6** (strict by default in web).
 10. **`.env` files cannot be created by agents** (harness denies all `.env*` writes). Code must fall back to dev defaults when env vars are absent: `DATABASE_URL ?? 'postgres://habits:habits@localhost:5433/habits'`, `JWT_SECRET ?? 'dev-secret-change-me'`, `PORT ?? 3001`. Keep `.env` support for production.
+11. **Drizzle 0.45 wraps pg errors in `DrizzleQueryError`** — pg fields live on `err.cause` (`err.cause.code === '23505'`, `err.cause.constraint`). Route handlers catching unique violations (e.g. duplicate check-in → 409) must check `err.cause`, not the top-level error.
 
 ## Shared API contracts (single source of truth — do not drift)
 
