@@ -489,7 +489,7 @@ test('awards thresholds crossed and skips already-unlocked', () => {
 
 - [ ] **Step 2: Feedback** — `+10 XP` / `+35 XP` toast near the tapped row; `Celebration` modal (CSS-only confetti burst, no library) when `leveledUp` or `unlockedAchievements.length > 0`, listing badge emoji + name; auto-dismiss 2.5s or tap.
 
-- [ ] **Step 3: Profile gallery** — `GET /api/achievements` (add tiny route returning catalog LEFT JOIN user unlocks → contract shape) — grid of badges, locked ones grayed with 🔒 and description.
+- [ ] **Step 3: Profile gallery** — `GET /api/achievements` (add tiny route returning catalog LEFT JOIN user unlocks → contract shape) — grid of badges, locked ones grayed with 🔒 and description. Carry-over from Task 12 review: change the seed's achievements insert to `onConflictDoUpdate` (upsert name/description/emoji on slug PK) so catalog copy edits propagate to existing DBs.
 
 - [ ] **Step 4: Carry-over fixes from Task 9 review** — (a) HabitForm sheet: explicit Cancel button + Escape-to-close + `aria-modal`; (b) `useCheckin`: shared `mutationKey: ['checkin']` and only invalidate in `onSettled` when it's the last in-flight checkin mutation (`queryClient.isMutating({mutationKey:['checkin']}) === 1`) to stop double-tap flicker.
 
