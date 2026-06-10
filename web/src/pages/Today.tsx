@@ -2,9 +2,10 @@
 // thin XP bar, then two tinted mega-sections — "✅ Tasks" pinned first (square
 // check boxes, due chips, collapsed ⏳ Scheduled list; hidden when empty) and
 // "🌱 Habits" (category sub-groups under light headers). Optimistic checks,
-// floating + opening the capture sheet, ⋯ row menus.
+// floating + opening the capture sheet, ⋯ row menus. v1.2 adds the collapsed
+// Done History section at the very bottom (read-only, lazily fetched).
 
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ApiError } from '../api';
 import ActionSheet from '../components/ActionSheet';
 import CaptureSheet from '../components/CaptureSheet';
@@ -15,14 +16,16 @@ import TaskForm from '../components/TaskForm';
 import TaskRow from '../components/TaskRow';
 import Toast from '../components/Toast';
 import XpBar from '../components/XpBar';
+import { formatTime } from '../format';
 import {
   useArchiveHabit,
   useCheckin,
   useDeleteHabit,
   useHabits,
 } from '../hooks/useHabits';
+import { useHistory } from '../hooks/useHistory';
 import { useCompleteTask, useDeleteTask, useTasks } from '../hooks/useTasks';
-import type { Category, Habit, TaskItem } from '../types';
+import type { Category, Habit, HistoryEntry, TaskItem } from '../types';
 
 /** XP chip anchored to the tapped habit/task row; `key` re-mounts on re-tap. */
 interface XpToast {
@@ -39,6 +42,18 @@ function formatToday(isoDate: string): string {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
+  });
+}
+
+/** History date label: "2026-06-10" → "Jun 10" (plain local-date parse, no TZ
+ * shift — the server's localDate is already user-TZ); adds the year when older. */
+function formatHistoryDate(localDate: string, now: Date = new Date()): string {
+  const [y, m, d] = localDate.split('-').map(Number);
+  if (!y || !m || !d) return localDate;
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    ...(y === now.getFullYear() ? {} : { year: 'numeric' }),
   });
 }
 
@@ -81,6 +96,27 @@ export default function Today() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [toast, setToast] = useState<XpToast | null>(null);
   const [celebration, setCelebration] = useState<CelebrationData | null>(null);
+  // Done History: section toggle + per-date expansion, same interaction as the
+  // Dump History. historyRequested latches true on first expansion and never
+  // resets — it fires the lazy GET /history query once.
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyRequested, setHistoryRequested] = useState(false);
+  const [openHistoryDates, setOpenHistoryDates] = useState<ReadonlySet<string>>(new Set());
+  const history = useHistory(historyRequested);
+
+  // Entries grouped by the server's localDate (user-TZ correct — NOT
+  // browser-local createdAt). Entries arrive createdAt desc, so each group is
+  // newest-first; the explicit key sort keeps the date rows newest-first even
+  // if localDate ever disagrees with createdAt order around midnight.
+  const historyGroups = useMemo(() => {
+    const groups = new Map<string, HistoryEntry[]>();
+    for (const entry of history.data ?? []) {
+      const group = groups.get(entry.localDate);
+      if (group) group.push(entry);
+      else groups.set(entry.localDate, [entry]);
+    }
+    return [...groups.entries()].sort(([a], [b]) => b.localeCompare(a));
+  }, [history.data]);
 
   // Stable callbacks so Toast/Celebration effects don't restart every render.
   const clearToast = useCallback(() => setToast(null), []);
@@ -160,6 +196,20 @@ export default function Today() {
     if (!window.confirm(`Delete "${task.name}"? This cannot be undone.`)) return;
     setActionError(null);
     deleteTask.mutate(task.id, { onError: (err) => setActionError(err.message) });
+  }
+
+  function toggleHistory() {
+    setHistoryOpen((open) => !open);
+    setHistoryRequested(true); // latch — fires the lazy /history query once
+  }
+
+  function toggleHistoryDate(key: string) {
+    setOpenHistoryDates((dates) => {
+      const next = new Set(dates);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   }
 
   if (isPending) return <p className="placeholder">Loading…</p>;
@@ -263,6 +313,50 @@ export default function Today() {
           })}
         </section>
       )}
+
+      <section className="done-history">
+        <button
+          type="button"
+          className="done-history-toggle"
+          aria-expanded={historyOpen}
+          onClick={toggleHistory}
+        >
+          History
+        </button>
+        {historyOpen &&
+          (history.isPending ? (
+            <p className="placeholder">Loading…</p>
+          ) : history.error ? (
+            <p className="form-error">Could not load history: {history.error.message}</p>
+          ) : historyGroups.length === 0 ? (
+            <p className="placeholder">Nothing completed yet</p>
+          ) : (
+            <ul className="done-history-dates">
+              {historyGroups.map(([key, group]) => (
+                <li key={key} className="done-history-date">
+                  <button
+                    type="button"
+                    className="done-history-date-toggle"
+                    aria-expanded={openHistoryDates.has(key)}
+                    onClick={() => toggleHistoryDate(key)}
+                  >
+                    {formatHistoryDate(key)} · {group.length} done
+                  </button>
+                  {openHistoryDates.has(key) && (
+                    <ul className="done-history-items">
+                      {group.map((entry) => (
+                        <li key={entry.id} className="done-history-item">
+                          {entry.kind === 'checkin' ? '✅' : '📦'} {entry.name}
+                          <span className="done-history-time"> · {formatTime(entry.createdAt)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ))}
+      </section>
 
       <button
         type="button"

@@ -166,6 +166,25 @@ export interface StatsResponse {
   habits: StatsHabit[];
 }
 
+/**
+ * GET /history entry — Done History (v1.2): one done-click, either a habit
+ * check-in or a task completion. Names come from a live join, so renames
+ * rewrite old entries and deletes erase them (accepted v1.2 limitations).
+ */
+export interface HistoryEntry {
+  id: string;
+  kind: 'checkin' | 'completion';
+  name: string;
+  /** YYYY-MM-DD in the user's timezone — group by this, NOT browser-local. */
+  localDate: string;
+  createdAt: string;
+}
+
+/** GET /history?limit= (default + cap 2000) → newest createdAt first. */
+export interface HistoryResponse {
+  entries: HistoryEntry[];
+}
+
 /** Dump item (UI name) — DB/API keep "inbox". */
 export interface InboxItem {
   id: string;
