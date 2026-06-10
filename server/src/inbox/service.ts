@@ -9,6 +9,8 @@ import type { UnlockedAchievement } from '../game/rewards.js';
 import { HttpError } from '../errors.js';
 import { createHabit } from '../habits/service.js';
 import type { CreateHabitInput, HabitContract } from '../habits/service.js';
+import { createTask } from '../tasks/service.js';
+import type { CreateTaskInput, TaskItemContract } from '../tasks/service.js';
 
 /** Shared API contract shape (plan: "Shared API contracts"). */
 export interface InboxItemContract {
@@ -32,6 +34,15 @@ export type ConvertInput = Omit<CreateHabitInput, 'sourceUrl'>;
 export interface ConvertResult {
   item: InboxItemContract;
   habit: HabitContract;
+  unlockedAchievements: UnlockedAchievement[];
+}
+
+/** Convert-task body — same sourceUrl rule as the habit convert. */
+export type ConvertTaskInput = Omit<CreateTaskInput, 'sourceUrl'>;
+
+export interface ConvertTaskResult {
+  item: InboxItemContract;
+  task: TaskItemContract;
   unlockedAchievements: UnlockedAchievement[];
 }
 
@@ -122,6 +133,57 @@ export async function convertItem(
       level: levelFromXp(user.xpTotal),
     });
     return { item: toContract(updated), habit, unlockedAchievements };
+  });
+}
+
+/**
+ * Triage a dump item into a one-off or recurring task (Task 27). Mirrors
+ * convertItem above exactly — same lock-first transaction, same 404/409
+ * semantics, same notes/sourceUrl carry-over, same achievement context (the
+ * conversions count treats habit and task conversions identically because it
+ * only looks at status='converted').
+ */
+export async function convertItemToTask(
+  userId: string,
+  itemId: string,
+  input: ConvertTaskInput,
+): Promise<ConvertTaskResult> {
+  return db.transaction(async (tx) => {
+    // Row lock FIRST (rewards.ts lockUserRow comment explains why).
+    const user = await lockUserRow(tx, userId);
+
+    const [item] = await tx
+      .select()
+      .from(inboxItems)
+      .where(and(eq(inboxItems.id, itemId), eq(inboxItems.userId, userId)));
+    if (!item) throw notFound();
+    if (item.status !== 'open') throw alreadyTriaged();
+
+    // Task creation rides the EXISTING service path inside THIS transaction.
+    const task = await createTask(
+      userId,
+      {
+        ...input,
+        notes: input.notes ?? item.text, // the dump text stays attached as the "why"
+        sourceUrl: item.sourceUrl ?? undefined,
+      },
+      tx,
+    );
+
+    // status='open' predicate: same concurrent-discard race guard as convertItem.
+    const [updated] = await tx
+      .update(inboxItems)
+      .set({ status: 'converted', taskId: task.id }) // habitId stays null
+      .where(and(eq(inboxItems.id, item.id), eq(inboxItems.status, 'open')))
+      .returning();
+    if (!updated) throw alreadyTriaged();
+
+    // Conversion grants no XP, so level comes straight from the locked row.
+    const unlockedAchievements: UnlockedAchievement[] = await awardAchievements(tx, userId, {
+      today: localDateFor(user.timezone),
+      level: levelFromXp(user.xpTotal),
+    });
+    return { item: toContract(updated), task, unlockedAchievements };
   });
 }
 

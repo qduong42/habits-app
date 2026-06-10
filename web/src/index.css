@@ -1088,6 +1088,159 @@ body {
   color: var(--text-muted);
 }
 
+/* --- Triage flow (card-by-card, Task 27) ------------------------------------ */
+
+.triage-start {
+  display: block;
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  color: #fff;
+  background: var(--purple);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.triage-overlay {
+  position: fixed;
+  inset: 0;
+  /* Above the page + tab bar; HabitForm's sheet (10) stacks within this
+     context, the Celebration scrim (20) stays on top of everything. */
+  z-index: 12;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.triage-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.triage-progress {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.triage-close {
+  border: none;
+  background: none;
+  font-size: 20px;
+  line-height: 1;
+  padding: 6px 10px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.triage-card {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 16px;
+  padding: 20px;
+}
+
+.triage-text {
+  margin: 0 0 8px;
+  font-size: 17px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.triage-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.triage-meta .dump-link {
+  margin-right: 0;
+  font-size: 13px;
+}
+
+.triage-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.triage-option {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 16px;
+  font-weight: 600;
+  font-family: inherit;
+  text-align: left;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.triage-option:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.triage-option-active {
+  border-color: var(--purple);
+  color: var(--purple);
+}
+
+.triage-option-letgo {
+  color: var(--text-muted);
+}
+
+.triage-inline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--purple);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.triage-inline-label {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.triage-inline .btn-primary {
+  margin-left: auto;
+}
+
+.triage-done-card {
+  text-align: center;
+  padding: 48px 20px;
+}
+
+.triage-done-title {
+  margin: 0 0 8px;
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.triage-done-hint {
+  margin: 0 0 24px;
+  color: var(--text-muted);
+}
+
 /* --- "Captured 💡" page toast (Today quick capture) --------------------------- */
 
 .captured-toast {

@@ -3,7 +3,14 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '../api';
-import type { CaptureInput, ConvertInput, ConvertResponse, InboxItem } from '../types';
+import type {
+  CaptureInput,
+  ConvertInput,
+  ConvertResponse,
+  ConvertTaskInput,
+  ConvertTaskResponse,
+  InboxItem,
+} from '../types';
 
 /** Open dump items, newest first (the server's default GET filter). */
 export function useInbox() {
@@ -34,6 +41,25 @@ export function useConvert() {
       void queryClient.invalidateQueries({ queryKey: ['inbox'] });
       void queryClient.invalidateQueries({ queryKey: ['habits'] });
       // Freshly unlocked badges should show in the Profile gallery.
+      if (res.unlockedAchievements.length > 0) {
+        void queryClient.invalidateQueries({ queryKey: ['achievements'] });
+      }
+    },
+  });
+}
+
+/** Triage a dump item into a one-off or recurring task (Task 27). */
+export function useConvertTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, input }: { itemId: string; input: ConvertTaskInput }) =>
+      apiFetch<ConvertTaskResponse>(`/inbox/${itemId}/convert-task`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    onSuccess: (res) => {
+      void queryClient.invalidateQueries({ queryKey: ['inbox'] });
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
       if (res.unlockedAchievements.length > 0) {
         void queryClient.invalidateQueries({ queryKey: ['achievements'] });
       }

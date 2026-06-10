@@ -177,3 +177,22 @@ export interface ConvertResponse {
   habit: Habit;
   unlockedAchievements: Achievement[];
 }
+
+/**
+ * POST /inbox/:id/convert-task body — same rules as TaskInput (dueDate XOR
+ * intervalHours); sourceUrl carries over from the dump item, never from the
+ * client. Notes default server-side to the item text.
+ */
+export interface ConvertTaskInput {
+  name: string;
+  notes?: string;
+  dueDate?: string;
+  intervalHours?: number;
+}
+
+/** POST /inbox/:id/convert-task response. */
+export interface ConvertTaskResponse {
+  item: InboxItem;
+  task: TaskItem;
+  unlockedAchievements: Achievement[];
+}

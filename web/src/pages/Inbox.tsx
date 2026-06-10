@@ -1,24 +1,15 @@
 // Dump tab (API name: inbox) — zero-friction capture box at the top (type →
 // enter → posts → input clears, keep typing; collapsed optional link field),
-// open items below with → Habit (convert via HabitForm) and Discard.
-// Card-by-card triage + task outcomes land in Task 27.
+// a "Triage N items →" button opening the card-by-card flow (TriageCard),
+// and the open items below with the → Habit / Discard per-item shortcuts.
 
 import { useCallback, useRef, useState, type FormEvent } from 'react';
 import Celebration, { type CelebrationData } from '../components/Celebration';
 import HabitForm from '../components/HabitForm';
+import TriageCard from '../components/TriageCard';
+import { formatAge } from '../format';
 import { useCapture, useDiscard, useInbox } from '../hooks/useInbox';
-import type { ConvertResponse, InboxItem } from '../types';
-
-/** Age label for a dump item: "just now", "5m", "5h", "3d". */
-function formatAge(createdAt: string, now: Date = new Date()): string {
-  const ms = now.getTime() - new Date(createdAt).getTime();
-  const minutes = Math.floor(ms / 60_000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
-}
+import type { Achievement, ConvertResponse, InboxItem } from '../types';
 
 export default function Inbox() {
   const { data: items, isPending, error } = useInbox();
@@ -31,6 +22,9 @@ export default function Inbox() {
   const [convertItem, setConvertItem] = useState<InboxItem | null>(null);
   const [celebration, setCelebration] = useState<CelebrationData | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // Snapshot of the open items when triage starts — fixes the "2 / 5"
+  // progress denominator while actions remove items from the live query.
+  const [triageQueue, setTriageQueue] = useState<InboxItem[] | null>(null);
 
   // Focus stays in the text input after every capture so you can keep typing.
   const textRef = useRef<HTMLInputElement>(null);
@@ -45,7 +39,15 @@ export default function Inbox() {
     setActionError(null);
     capture.mutate(
       { text: trimmed, ...(url !== '' ? { sourceUrl: url } : {}) },
-      { onError: (err) => setActionError(err.message) },
+      {
+        onError: (err) => {
+          setActionError(err.message);
+          // The POST failed after the optimistic clear below — restore what
+          // was typed (unless the user already started the next thought).
+          setText((current) => (current === '' ? trimmed : current));
+          setSourceUrl((current) => (current === '' ? url : current));
+        },
+      },
     );
     // Clear optimistically — the input is ready for the next thought even
     // while the POST is in flight; an error re-surfaces below the box.
@@ -54,10 +56,14 @@ export default function Inbox() {
     textRef.current?.focus();
   }
 
-  function handleConverted(res: ConvertResponse) {
-    if (res.unlockedAchievements.length > 0) {
-      setCelebration({ level: null, unlockedAchievements: res.unlockedAchievements });
+  function celebrate(unlocked: Achievement[]) {
+    if (unlocked.length > 0) {
+      setCelebration({ level: null, unlockedAchievements: unlocked });
     }
+  }
+
+  function handleConverted(res: ConvertResponse) {
+    celebrate(res.unlockedAchievements);
   }
 
   function handleDiscard(item: InboxItem) {
@@ -119,44 +125,62 @@ export default function Inbox() {
           <p>Mind full? Dump it here — then schedule it.</p>
         </div>
       ) : (
-        <ul className="dump-list">
-          {(items ?? []).map((item) => (
-            <li key={item.id} className="dump-item">
-              <div className="dump-item-top">
-                <p className="dump-text">{item.text}</p>
-                <span className="dump-age">{formatAge(item.createdAt)}</span>
-              </div>
-              <div className="dump-item-actions">
-                {item.sourceUrl && (
-                  <a
-                    className="dump-link"
-                    href={item.sourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label="Open source link"
+        <>
+          <button
+            type="button"
+            className="triage-start"
+            onClick={() => setTriageQueue(items ?? [])}
+          >
+            Triage {items?.length} item{items?.length === 1 ? '' : 's'} →
+          </button>
+          <ul className="dump-list">
+            {(items ?? []).map((item) => (
+              <li key={item.id} className="dump-item">
+                <div className="dump-item-top">
+                  <p className="dump-text">{item.text}</p>
+                  <span className="dump-age">{formatAge(item.createdAt)}</span>
+                </div>
+                <div className="dump-item-actions">
+                  {item.sourceUrl && (
+                    <a
+                      className="dump-link"
+                      href={item.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label="Open source link"
+                    >
+                      🔗
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    className="dump-btn dump-btn-habit"
+                    onClick={() => setConvertItem(item)}
                   >
-                    🔗
-                  </a>
-                )}
-                <button
-                  type="button"
-                  className="dump-btn dump-btn-habit"
-                  onClick={() => setConvertItem(item)}
-                >
-                  → Habit
-                </button>
-                <button
-                  type="button"
-                  className="dump-btn dump-btn-discard"
-                  onClick={() => handleDiscard(item)}
-                  disabled={discard.isPending}
-                >
-                  Discard
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+                    → Habit
+                  </button>
+                  <button
+                    type="button"
+                    className="dump-btn dump-btn-discard"
+                    onClick={() => handleDiscard(item)}
+                    disabled={discard.isPending}
+                  >
+                    Discard
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {triageQueue && (
+        <TriageCard
+          items={triageQueue}
+          paused={celebration !== null}
+          onCelebrate={celebrate}
+          onClose={() => setTriageQueue(null)}
+        />
       )}
 
       {convertItem && (

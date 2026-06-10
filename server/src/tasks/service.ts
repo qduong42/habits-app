@@ -40,6 +40,8 @@ export interface CreateTaskInput {
   notes?: string;
   dueDate?: string; // YYYY-MM-DD, one-off only
   intervalHours?: number; // >= 1, recurring only
+  /** Internal: carried over from a dump item by convert-task (Task 27) — never client-supplied (the route schemas omit it). */
+  sourceUrl?: string;
 }
 
 export interface UpdateTaskInput {
@@ -211,19 +213,22 @@ export async function listTasks(
     .map(({ item }) => item);
 }
 
+/** `ex` lets the dump convert-task transaction (inbox/service.ts) ride this same path. */
 export async function createTask(
   userId: string,
   input: CreateTaskInput,
+  ex: DbOrTx = db,
 ): Promise<TaskItemContract> {
-  const tz = await userTz(userId);
+  const tz = await userTz(userId, ex);
   const now = new Date();
   const recurring = input.intervalHours !== undefined;
-  const [created] = await db
+  const [created] = await ex
     .insert(tasks)
     .values({
       userId,
       name: input.name,
       notes: input.notes ?? null,
+      sourceUrl: input.sourceUrl ?? null,
       dueDate: recurring ? null : (input.dueDate ?? null),
       intervalHours: recurring ? input.intervalHours! : null,
       // recurring: due one interval from creation (spec data model)

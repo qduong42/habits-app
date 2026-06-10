@@ -19,7 +19,9 @@ const intervalSchema = z.number().min(1).max(8760);
 
 const MUTUALLY_EXCLUSIVE = 'dueDate and intervalHours are mutually exclusive';
 
-const createSchema = z
+// Exported: POST /inbox/:id/convert-task (inbox/routes.ts) takes the exact
+// same body — single source of truth so the two paths can't drift.
+export const createTaskSchema = z
   .object({
     name: nameSchema,
     notes: notesSchema.optional(),
@@ -79,7 +81,7 @@ tasksRouter.get('/', async (req, res) => {
 });
 
 tasksRouter.post('/', async (req, res) => {
-  const input = parseBody(createSchema, req.body);
+  const input = parseBody(createTaskSchema, req.body);
   res.status(201).json(await createTask(userIdOf(req), input));
 });
 

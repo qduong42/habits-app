@@ -593,11 +593,11 @@ Definitions: recurring `overdue` = `nextDue <= now` for one-offs `dueDate < toda
 - Modify: `server/src/inbox/routes.ts` (+`POST /inbox/:id/convert-task`), `server/test/inbox.test.ts`
 - Create: `web/src/components/TriageCard.tsx`; Modify: `web/src/pages/Inbox.tsx`
 
-- [ ] **Step 1: TDD convert-task** — failing tests: convert-task with `{name, dueDate?}` or `{name, intervalHours}` → creates task carrying notes (default item text) + sourceUrl, item → `status:'converted', taskId`; converting an already-converted item → 409; conversions achievement count includes BOTH habit and task conversions (assert `first-conversion` unlocks via convert-task). Implement, green.
+- [x] **Step 1: TDD convert-task** — failing tests: convert-task with `{name, dueDate?}` or `{name, intervalHours}` → creates task carrying notes (default item text) + sourceUrl, item → `status:'converted', taskId`; converting an already-converted item → 409; conversions achievement count includes BOTH habit and task conversions (assert `first-conversion` unlocks via convert-task). Implement, green.
 
-- [ ] **Step 2: Triage UI** — `Triage N items →` button on Dump tab opens card-by-card mode (one item per screen, progress `2 / 5`): four big buttons per the approved mockup — ✅ Task once (inline optional date → convert-task) / 🔁 Task recurring (inline interval picker → convert-task) / 🌱 Habit (prefilled `HabitForm` → convert) / 🗑 Let it go (discard). Advances to next item; final card → "Mind clear 🧘" + back to Dump. Per-item **→ Habit / Discard** buttons from Task 16 remain as shortcuts.
+- [x] **Step 2: Triage UI** — `Triage N items →` button on Dump tab opens card-by-card mode (one item per screen, progress `2 / 5`): four big buttons per the approved mockup — ✅ Task once (inline optional date → convert-task) / 🔁 Task recurring (inline interval picker → convert-task) / 🌱 Habit (prefilled `HabitForm` → convert) / 🗑 Let it go (discard). Advances to next item; final card → "Mind clear 🧘" + back to Dump. Per-item **→ Habit / Discard** buttons from Task 16 remain as shortcuts.
 
-- [ ] **Step 3: Verify + manual + commit** — `feat: card-by-card triage with task conversion`
+- [x] **Step 3: Verify + manual + commit** — `feat: card-by-card triage with task conversion`
 
 **Slice 3b demo:** dump 5 thoughts → triage into a dated task, a 12h recurring task, a habit, and a discard → Today shows the 📌 section.
 

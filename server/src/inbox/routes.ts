@@ -2,7 +2,14 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { HttpError } from '../errors.js';
 import { requireAuth, type AuthedRequest } from '../auth/middleware.js';
-import { captureItem, convertItem, discardItem, listItems } from './service.js';
+import { createTaskSchema } from '../tasks/routes.js';
+import {
+  captureItem,
+  convertItem,
+  convertItemToTask,
+  discardItem,
+  listItems,
+} from './service.js';
 
 const captureSchema = z.object({
   text: z.string().trim().min(1).max(5000),
@@ -70,6 +77,14 @@ inboxRouter.get('/', async (req, res) => {
 inboxRouter.post('/:id/convert', async (req, res) => {
   const input = parseBody(convertSchema, req.body);
   res.json(await convertItem(userIdOf(req), itemId(req.params.id), input));
+});
+
+// Same body rules as POST /tasks (shared schema): name ≤200, notes ≤5000,
+// dueDate XOR intervalHours. sourceUrl carries over from the item, never
+// from the client (createTaskSchema has no sourceUrl field).
+inboxRouter.post('/:id/convert-task', async (req, res) => {
+  const input = parseBody(createTaskSchema, req.body);
+  res.json(await convertItemToTask(userIdOf(req), itemId(req.params.id), input));
 });
 
 inboxRouter.post('/:id/discard', async (req, res) => {

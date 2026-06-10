@@ -10,6 +10,7 @@ import {
   checkins,
   achievements,
   inboxItems,
+  tasks,
   userAchievements,
 } from '../src/db/schema.js';
 import { ACHIEVEMENT_CATALOG } from '../src/game/achievements.js';
@@ -63,6 +64,10 @@ function convert(cookie: string, itemId: string, body: Record<string, unknown>) 
   return request(app).post(`/api/inbox/${itemId}/convert`).set('Cookie', cookie).send(body);
 }
 
+function convertTask(cookie: string, itemId: string, body: Record<string, unknown>) {
+  return request(app).post(`/api/inbox/${itemId}/convert-task`).set('Cookie', cookie).send(body);
+}
+
 function discard(cookie: string, itemId: string) {
   return request(app).post(`/api/inbox/${itemId}/discard`).set('Cookie', cookie);
 }
@@ -75,9 +80,10 @@ async function cleanup() {
   const ids = userRows.map((u) => u.id);
   if (ids.length > 0) {
     await db.delete(userAchievements).where(inArray(userAchievements.userId, ids));
-    await db.delete(inboxItems).where(inArray(inboxItems.userId, ids)); // FK habits → first
+    await db.delete(inboxItems).where(inArray(inboxItems.userId, ids)); // FK habits/tasks → first
     await db.delete(checkins).where(inArray(checkins.userId, ids));
     await db.delete(habits).where(inArray(habits.userId, ids));
+    await db.delete(tasks).where(inArray(tasks.userId, ids)); // task_completions cascade
     await db.delete(categories).where(inArray(categories.userId, ids));
     await db.delete(users).where(inArray(users.id, ids));
   }
@@ -347,6 +353,208 @@ describe('POST /api/inbox/:id/convert', () => {
     const ids = res.body.unlockedAchievements.map((a: { id: string }) => a.id);
     expect(ids).toContain('first-conversion');
     expect(ids).toContain('conversions-5'); // conversions ≥ 5 visible to the check-in ctx
+  });
+});
+
+describe('POST /api/inbox/:id/convert-task (Task 27)', () => {
+  it('creates an undated one-off (notes default to item text, sourceUrl carried), links the item, awards first-conversion', async () => {
+    const u = await makeUser();
+    const itemId = await capture(u.cookie, {
+      text: 'Buy fertilizer for the balcony plants',
+      sourceUrl: 'https://example.com/plants',
+    });
+
+    const res = await convertTask(u.cookie, itemId, { name: 'Buy fertilizer' });
+    expect(res.status).toBe(200);
+    expect(res.body.task).toEqual({
+      id: expect.any(String),
+      name: 'Buy fertilizer',
+      notes: 'Buy fertilizer for the balcony plants', // defaults to the item text
+      sourceUrl: 'https://example.com/plants', // carried from the item
+      kind: 'oneoff',
+      group: 'undated',
+      dueLabel: null,
+      dueDate: null,
+      intervalHours: null,
+      nextDue: null,
+    });
+    expect(res.body.item).toEqual({
+      id: itemId,
+      text: 'Buy fertilizer for the balcony plants',
+      sourceUrl: 'https://example.com/plants',
+      status: 'converted',
+      habitId: null, // exactly one of habitId/taskId when converted
+      taskId: res.body.task.id,
+      createdAt: expect.any(String),
+    });
+    // first-conversion unlocks through the convert-task path too
+    expect(res.body.unlockedAchievements).toEqual([
+      {
+        id: 'first-conversion',
+        name: 'Bright Idea',
+        description: 'Turn your first dump item into a habit or task.',
+        emoji: '💡',
+        unlockedAt: expect.any(String),
+      },
+    ]);
+
+    // the task shows up in GET /tasks (undated → in the default list)
+    const list = await request(app).get('/api/tasks').set('Cookie', u.cookie);
+    expect(list.body.tasks.map((t: { id: string }) => t.id)).toContain(res.body.task.id);
+  });
+
+  it('dueDate makes a dated one-off; intervalHours makes a recurring task', async () => {
+    const u = await makeUser();
+    const datedId = await capture(u.cookie, { text: 'file the taxes' });
+    const before = Date.now();
+    const dated = await convertTask(u.cookie, datedId, {
+      name: 'File taxes',
+      dueDate: '2099-01-01',
+    });
+    expect(dated.status).toBe(200);
+    expect(dated.body.task).toMatchObject({
+      kind: 'oneoff',
+      dueDate: '2099-01-01',
+      intervalHours: null,
+      nextDue: null,
+      group: 'scheduled', // far-future one-off is not yet actionable
+    });
+
+    const recurringId = await capture(u.cookie, { text: 'water the plants' });
+    const recurring = await convertTask(u.cookie, recurringId, {
+      name: 'Water plants',
+      intervalHours: 12,
+    });
+    expect(recurring.status).toBe(200);
+    expect(recurring.body.task).toMatchObject({
+      kind: 'recurring',
+      intervalHours: 12,
+      dueDate: null,
+      group: 'scheduled', // due one interval from creation
+    });
+    // nextDue ≈ creation + 12h
+    const nextDue = Date.parse(recurring.body.task.nextDue);
+    expect(nextDue).toBeGreaterThanOrEqual(before + 12 * 3_600_000);
+    expect(nextDue).toBeLessThanOrEqual(Date.now() + 12 * 3_600_000);
+    expect(recurring.body.item).toMatchObject({
+      status: 'converted',
+      taskId: recurring.body.task.id,
+      habitId: null,
+    });
+  });
+
+  it('explicit notes win over the item text', async () => {
+    const u = await makeUser();
+    const itemId = await capture(u.cookie, { text: 'raw dump text' });
+    const res = await convertTask(u.cookie, itemId, { name: 'With notes', notes: 'my own why' });
+    expect(res.status).toBe(200);
+    expect(res.body.task.notes).toBe('my own why');
+  });
+
+  it('validation 400: dueDate AND intervalHours together; name > 200 chars; intervalHours < 1', async () => {
+    const u = await makeUser();
+    const itemId = await capture(u.cookie, { text: 'invalid combos' });
+
+    const both = await convertTask(u.cookie, itemId, {
+      name: 'Both',
+      dueDate: '2026-07-01',
+      intervalHours: 24,
+    });
+    expect(both.status).toBe(400);
+    expect(both.body.error.code).toBe('validation');
+
+    const longName = await convertTask(u.cookie, itemId, { name: 'x'.repeat(201) });
+    expect(longName.status).toBe(400);
+
+    const tinyInterval = await convertTask(u.cookie, itemId, { name: 'Tiny', intervalHours: 0 });
+    expect(tinyInterval.status).toBe(400);
+
+    // none of the failures triaged the item
+    const list = await request(app).get('/api/inbox').set('Cookie', u.cookie);
+    expect(list.body.map((i: { id: string; status: string }) => [i.id, i.status])).toEqual([
+      [itemId, 'open'],
+    ]);
+  });
+
+  it('already-triaged item → 409 already_triaged (convert-task twice, and after a habit convert)', async () => {
+    const u = await makeUser();
+    const itemId = await capture(u.cookie, { text: 'only once' });
+    expect((await convertTask(u.cookie, itemId, { name: 'Once' })).status).toBe(200);
+
+    const dup = await convertTask(u.cookie, itemId, { name: 'Twice' });
+    expect(dup.status).toBe(409);
+    expect(dup.body.error.code).toBe('already_triaged');
+
+    const habitFirst = await capture(u.cookie, { text: 'habit first' });
+    expect(
+      (
+        await convert(u.cookie, habitFirst, {
+          name: 'Habit first',
+          categoryId: u.categoryId,
+          frequencyType: 'daily',
+        })
+      ).status,
+    ).toBe(200);
+    const afterHabit = await convertTask(u.cookie, habitFirst, { name: 'Too late' });
+    expect(afterHabit.status).toBe(409);
+    expect(afterHabit.body.error.code).toBe('already_triaged');
+  });
+
+  it("foreign user's item → 404; bogus uuid → 404; missing uuid → 404", async () => {
+    const u = await makeUser();
+    const other = await makeUser();
+    const foreignId = await capture(other.cookie, { text: 'mine, not yours' });
+
+    expect((await convertTask(u.cookie, foreignId, { name: 'Steal' })).status).toBe(404);
+    expect((await convertTask(u.cookie, 'not-a-uuid', { name: 'Bogus' })).status).toBe(404);
+    expect(
+      (
+        await convertTask(u.cookie, '00000000-0000-4000-8000-000000000000', { name: 'Ghost' })
+      ).status,
+    ).toBe(404);
+  });
+
+  it('401 unauthenticated', async () => {
+    const res = await request(app)
+      .post('/api/inbox/00000000-0000-4000-8000-000000000000/convert-task')
+      .send({ name: 'Nope' });
+    expect(res.status).toBe(401);
+  });
+
+  it('habit and task conversions bump the SAME conversions count (conversions-5 mixing both paths)', async () => {
+    const u = await makeUser();
+    const ids: string[] = [];
+    for (let i = 1; i <= 5; i++) ids.push(await capture(u.cookie, { text: `idea ${i}` }));
+
+    const unlockedIds = (r: { body: { unlockedAchievements: { id: string }[] } }) =>
+      r.body.unlockedAchievements.map((a) => a.id);
+
+    // 1st + 2nd via habit convert, 3rd + 4th + 5th via convert-task
+    const first = await convert(u.cookie, ids[0]!, {
+      name: 'Idea habit 1',
+      categoryId: u.categoryId,
+      frequencyType: 'daily',
+    });
+    expect(first.status).toBe(200);
+    expect(unlockedIds(first)).toEqual(['first-conversion']);
+
+    const second = await convert(u.cookie, ids[1]!, {
+      name: 'Idea habit 2',
+      categoryId: u.categoryId,
+      frequencyType: 'daily',
+    });
+    expect(unlockedIds(second)).toEqual([]);
+
+    const third = await convertTask(u.cookie, ids[2]!, { name: 'Idea task 3' });
+    expect(third.status).toBe(200);
+    expect(unlockedIds(third)).toEqual([]);
+    const fourth = await convertTask(u.cookie, ids[3]!, { name: 'Idea task 4' });
+    expect(unlockedIds(fourth)).toEqual([]);
+
+    // the 5th conversion — a TASK convert — crosses the shared threshold
+    const fifth = await convertTask(u.cookie, ids[4]!, { name: 'Idea task 5', intervalHours: 24 });
+    expect(fifth.status).toBe(200);
+    expect(unlockedIds(fifth)).toEqual(['conversions-5']);
   });
 });
 
