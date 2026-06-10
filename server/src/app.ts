@@ -8,6 +8,7 @@ import { achievementsRouter } from './achievements/routes.js';
 import { authRouter } from './auth/routes.js';
 import { categoriesRouter } from './categories/routes.js';
 import { habitsRouter } from './habits/routes.js';
+import { inboxRouter } from './inbox/routes.js';
 import { HttpError } from './errors.js';
 
 // Resolves to <repo>/web/dist both from src/ (tsx) and from dist/ (compiled).
@@ -27,6 +28,7 @@ export function createApp() {
   app.use('/api/habits', habitsRouter);
   app.use('/api/categories', categoriesRouter);
   app.use('/api/achievements', achievementsRouter);
+  app.use('/api/inbox', inboxRouter);
 
   // Mount all /api routers above this JSON 404 catch-all.
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'not_found', 'Not found')));

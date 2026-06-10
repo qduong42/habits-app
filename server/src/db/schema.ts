@@ -68,6 +68,22 @@ export const checkins = pgTable(
 
 export type Checkin = typeof checkins.$inferSelect;
 
+// UI name: "Dump" — DB/API keep the `inbox` naming (spec).
+export const inboxItems = pgTable('inbox_items', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id),
+  text: text('text').notNull(),
+  sourceUrl: text('source_url'),
+  status: text('status', { enum: ['open', 'converted', 'discarded'] })
+    .notNull()
+    .default('open'),
+  habitId: uuid('habit_id').references(() => habits.id), // set when triaged into a habit
+  // taskId FK comes in Task 25 together with the tasks table.
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type InboxItem = typeof inboxItems.$inferSelect;
+
 export const achievements = pgTable('achievements', {
   id: text('id').primaryKey(), // slug, e.g. 'habit-streak-7'
   name: text('name').notNull(),

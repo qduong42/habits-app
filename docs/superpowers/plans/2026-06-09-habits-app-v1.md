@@ -508,9 +508,9 @@ test('awards thresholds crossed and skips already-unlocked', () => {
 - Create: `server/src/inbox/routes.ts`; Modify: `server/src/app.ts`
 - Test: `server/test/inbox.test.ts`
 
-- [ ] **Step 1: Failing tests** — capture `{text, sourceUrl?}` → open item; list newest-first (only own, only non-discarded by default, `?all=1` for everything); convert `{name, categoryId, frequencyType, weeklyTarget?, notes?}` → creates habit carrying `notes` (default = item text) + `sourceUrl`, item → `status:'converted', habitId`; converting twice → 409; discard → `status:'discarded'`; `first-conversion` achievement awarded on convert (response includes `unlockedAchievements`).
+- [x] **Step 1: Failing tests** — capture `{text, sourceUrl?}` → open item; list newest-first (only own, only non-discarded by default, `?all=1` for everything); convert `{name, categoryId, frequencyType, weeklyTarget?, notes?}` → creates habit carrying `notes` (default = item text) + `sourceUrl`, item → `status:'converted', habitId`; converting twice → 409; discard → `status:'discarded'`; `first-conversion` achievement awarded on convert (response includes `unlockedAchievements`).
 
-- [ ] **Step 2: Implement + green + commit** — `feat(server): idea inbox with convert-to-habit`
+- [x] **Step 2: Implement + green + commit** — `feat(server): idea inbox with convert-to-habit`
 
 ### Task 16: Dump tab UI + quick capture
 

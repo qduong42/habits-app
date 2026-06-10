@@ -1,6 +1,14 @@
 import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
-import { achievements, categories, checkins, habits, userAchievements, users } from '../db/schema.js';
+import {
+  achievements,
+  categories,
+  checkins,
+  habits,
+  inboxItems,
+  userAchievements,
+  users,
+} from '../db/schema.js';
 import type { Category, Habit } from '../db/schema.js';
 import { isoWeekOf, localDateFor } from '../game/dates.js';
 import { checkinXp, levelFromXp } from '../game/xp.js';
@@ -10,6 +18,13 @@ import { HttpError } from '../errors.js';
 
 /** A drizzle transaction handle (same query API as `db`). */
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Either the pool-backed `db` or a transaction handle. The habit-creation
+ * path accepts this so other services (inbox convert) can run it inside
+ * their own transaction.
+ */
+export type DbOrTx = typeof db | Tx;
 
 /** Shared API contract shapes (plan: "Shared API contracts"). */
 export interface CategoryContract {
@@ -118,8 +133,8 @@ function toContract(
   };
 }
 
-async function todayFor(userId: string): Promise<string> {
-  const [user] = await db
+async function todayFor(userId: string, ex: DbOrTx = db): Promise<string> {
+  const [user] = await ex
     .select({ timezone: users.timezone })
     .from(users)
     .where(eq(users.id, userId));
@@ -132,11 +147,11 @@ async function todayFor(userId: string): Promise<string> {
  * those habits (no N+1) — the daily streak needs full history anyway, and
  * doneToday/weekCount fall out of the same rows.
  */
-async function buildHabits(userId: string, habitId?: string) {
-  const today = await todayFor(userId);
+async function buildHabits(userId: string, habitId?: string, ex: DbOrTx = db) {
+  const today = await todayFor(userId, ex);
   const filters = [eq(habits.userId, userId), isNull(habits.archivedAt)];
   if (habitId) filters.push(eq(habits.id, habitId));
-  const rows = await db
+  const rows = await ex
     .select({ habit: habits, category: categories })
     .from(habits)
     .innerJoin(categories, eq(habits.categoryId, categories.id))
@@ -145,7 +160,7 @@ async function buildHabits(userId: string, habitId?: string) {
 
   const datesByHabit = new Map<string, Set<string>>();
   if (rows.length > 0) {
-    const checkinRows = await db
+    const checkinRows = await ex
       .select({ habitId: checkins.habitId, localDate: checkins.localDate })
       .from(checkins)
       .where(
@@ -175,16 +190,24 @@ export async function listHabits(
   return buildHabits(userId);
 }
 
-async function habitContract(userId: string, habitId: string): Promise<HabitContract> {
-  const { habits: list } = await buildHabits(userId, habitId);
+async function habitContract(
+  userId: string,
+  habitId: string,
+  ex: DbOrTx = db,
+): Promise<HabitContract> {
+  const { habits: list } = await buildHabits(userId, habitId, ex);
   const habit = list[0];
   if (!habit) throw notFound();
   return habit;
 }
 
 /** Category must exist and be builtin (userId null) or owned by the user. */
-async function assertCategoryUsable(userId: string, categoryId: string): Promise<void> {
-  const [category] = await db
+async function assertCategoryUsable(
+  userId: string,
+  categoryId: string,
+  ex: DbOrTx = db,
+): Promise<void> {
+  const [category] = await ex
     .select({ id: categories.id })
     .from(categories)
     .where(
@@ -199,9 +222,10 @@ async function assertCategoryUsable(userId: string, categoryId: string): Promise
 export async function createHabit(
   userId: string,
   input: CreateHabitInput,
+  ex: DbOrTx = db,
 ): Promise<HabitContract> {
-  await assertCategoryUsable(userId, input.categoryId);
-  const [created] = await db
+  await assertCategoryUsable(userId, input.categoryId, ex);
+  const [created] = await ex
     .insert(habits)
     .values({
       userId,
@@ -213,7 +237,7 @@ export async function createHabit(
       sourceUrl: input.sourceUrl ?? null,
     })
     .returning();
-  return habitContract(userId, created!.id);
+  return habitContract(userId, created!.id, ex);
 }
 
 export async function updateHabit(
@@ -256,6 +280,18 @@ export async function updateHabit(
     })
     .where(eq(habits.id, habitId));
   return habitContract(userId, habitId);
+}
+
+/**
+ * Dump items already converted into a habit (tasks join the count in Task 25).
+ * Checked on BOTH checkin and convert events.
+ */
+export async function conversionsCount(ex: DbOrTx, userId: string): Promise<number> {
+  const [row] = await ex
+    .select({ count: sql<number>`count(*)::int` })
+    .from(inboxItems)
+    .where(and(eq(inboxItems.userId, userId), eq(inboxItems.status, 'converted')));
+  return row!.count;
 }
 
 export async function archiveHabit(userId: string, habitId: string): Promise<void> {
@@ -453,7 +489,7 @@ export async function checkinHabit(userId: string, habitId: string): Promise<Che
         habitStreak,
         dayStreak: dayStreak(new Set(checkinRows.map((r) => r.localDate)), today),
         level,
-        conversions: 0, // wired in Task 15 (inbox table doesn't exist yet)
+        conversions: await conversionsCount(tx, userId),
         categoriesToday: todayCategoryRows.length,
         unlocked: new Set(unlockedRows.map((r) => r.achievementId)),
       });
