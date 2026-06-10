@@ -13,7 +13,7 @@ The card-by-card decision turning one Dump Item into a Task, a Recurring Task, o
 _Avoid_: convert (use only for the API verb), process, sort
 
 **Task**:
-A one-off to-do with an optional due date; done once, then gone. Personal-only in v1.
+Something the world needs done — once (optional due date) or cyclically (Recurring Task); no streaks, +5 XP. The Task/Habit boundary is chores-vs-practices, NOT repeating-vs-once (decided 2026-06-10 — a recurring chore is still a Task).
 _Avoid_: todo, chore
 
 **Recurring Task**:
@@ -21,7 +21,7 @@ A Task on an "every N hours/days" cycle whose next-due timestamp resets from its
 _Avoid_: scheduled task, repeating task
 
 **Habit**:
-A practice with a daily or N-times-per-week frequency, tracked with streaks; the gamified heart of the app.
+A practice YOU are building (daily or N-times-per-week), tracked with streaks; the gamified heart of the app. Expected to be the ~10% minority of triage outcomes — most dumps become Tasks.
 _Avoid_: routine, goal
 
 **Check-in**:
