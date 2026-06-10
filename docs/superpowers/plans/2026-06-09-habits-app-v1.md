@@ -633,8 +633,8 @@ Definitions: recurring `overdue` = `nextDue <= now` for one-offs `dueDate < toda
 
 **Files:** Modify: `web/vite.config.ts`, `web/index.html`; Create: `web/public/icons/*` (generate simple 🔥-on-purple SVG → 192/512 PNG via a tiny node script or hand-made SVG icons — `vite-plugin-pwa` accepts SVG)
 
-- [ ] **Step 1: Implement** — `npm i -w web -D vite-plugin-pwa`; `VitePWA({ registerType: 'autoUpdate', manifest: { name: 'Habits', short_name: 'Habits', display: 'standalone', theme_color: '#5e35b1', background_color: '#fafafa', icons } })`; cache app shell only (default workbox config — API stays network-only via `navigateFallbackDenylist: [/^\/api/]`).
-- [ ] **Step 2: Verify build emits `manifest.webmanifest` + `sw.js`; commit** — `feat(web): installable PWA`
+- [x] **Step 1: Implement** — `npm i -w web -D vite-plugin-pwa`; `VitePWA({ registerType: 'autoUpdate', manifest: { name: 'Habits', short_name: 'Habits', display: 'standalone', theme_color: '#5e35b1', background_color: '#fafafa', icons } })`; cache app shell only (default workbox config — API stays network-only via `navigateFallbackDenylist: [/^\/api/]`).
+- [x] **Step 2: Verify build emits `manifest.webmanifest` + `sw.js`; commit** — `feat(web): installable PWA`
 
 ### Task 21: Web push + daily nudge job
 
