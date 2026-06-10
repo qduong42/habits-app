@@ -14,11 +14,19 @@
 
 http://localhost:3001 — **`tsx watch`** (hot-reloads server code; plain tsx was the root cause of the "✕ doesn't remove" bug — stale process missing the new routes). Postgres :5433. Logins huy/lea, `changeme123`. Frontend changes still need `npm run build -w web` (served from static dist).
 
+## Deployment (Tailscale, option 2 — in progress 2026-06-10 evening)
+
+- **Production container `habits-app-api-1` is RUNNING on host port 3002** (`docker compose up --build -d api`, `restart: unless-stopped`): NODE_ENV=production, shares the dev postgres volume/db (`habits`) so all data is live there. **Secrets are baked into the container env at creation** (JWT_SECRET = random hex, VAPID keypair generated 2026-06-10 via `npx web-push generate-vapid-keys`, subject mailto:h.duong@turbit.de) — they persist across restarts/reboots but are LOST if the container is recreated; on `docker compose up --build` after merges, re-export them in the shell first (or finally create a `.env` next to compose — Huy must do that by hand, agents can't write `.env*`). To read current values: `docker inspect habits-app-api-1 --format '{{json .Config.Env}}'`.
+- **Tailscale**: machine moved from work tailnet (turbitduong@) to personal tailnet **huyictigcse@** via profile switch (`tailscale switch` toggles; work profile preserved). Devices on personal tailnet: this machine (100.127.36.43), huys-s24-ultra, iphone171.
+- **BLOCKED on one manual click:** Tailscale "serve" isn't enabled on the personal tailnet yet. Huy must open https://login.tailscale.com/f/serve?node=nMjJvnxR6i11CNTRL logged in as huyictigcse@ and enable (earlier 404 was a work/personal account mismatch in the browser). THEN run: `tailscale serve --bg --https=443 http://localhost:3002` → app at `https://huy-tuxedo-infinitybook-pro-gen8-mk1.<tailnet>.ts.net`. Phones: open that URL → Add to Home Screen → enable notifications in Profile.
+- Logins still huy/lea `changeme123` — fine for tailnet-only, but should be changed (no in-app password change exists; would need a hash update script or new feature).
+
 ## Next actions
 
-1. **Huy: review/merge PR #2** (test plan in the PR description), then optionally delete merged branches.
-2. **Grill session pending:** archived habits are unreachable (no view/unarchive anywhere) — open questions in `new_features.md` 2026-06-10 17:43. Don't implement before grilling.
-3. Polish backlog: `current_issues.md` (minor UX/perf items).
+1. **Huy: click the serve-enable link above**, then finish serve setup (one command, see above).
+2. **Huy: review/merge PR #2** (test plan in the PR description), then refresh the deployed container (`docker compose up --build -d api` with env re-exported).
+3. **Grill session pending:** archived habits are unreachable (no view/unarchive anywhere) — open questions in `new_features.md` 2026-06-10 17:43. Don't implement before grilling.
+4. Polish backlog: `current_issues.md` (minor UX/perf items) + consider "change password" feature.
 
 ## Process notes (for fresh sessions)
 
