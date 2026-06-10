@@ -7,6 +7,7 @@ import { db } from '../db/client.js';
 import { users } from '../db/schema.js';
 import { HttpError } from '../errors.js';
 import { JWT_SECRET, requireAuth, type AuthedRequest } from './middleware.js';
+import { normalizeNudgeTime } from '../settings/routes.js';
 
 const THIRTY_DAYS_MS = 30 * 24 * 3600 * 1000;
 
@@ -67,5 +68,11 @@ authRouter.get('/me', requireAuth, async (req, res) => {
   if (!user) {
     throw new HttpError(401, 'unauthenticated', 'Invalid session');
   }
-  res.json({ id: user.id, name: user.name });
+  res.json({
+    id: user.id,
+    name: user.name,
+    timezone: user.timezone,
+    // pg `time` columns come back 'HH:MM:SS' — API speaks 'HH:MM'.
+    nudgeTime: normalizeNudgeTime(user.nudgeTime),
+  });
 });

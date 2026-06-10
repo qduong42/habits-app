@@ -4,6 +4,10 @@ import { ApiError, apiFetch } from './api';
 export interface Me {
   id: string;
   name: string;
+  /** IANA zone, e.g. 'Europe/Berlin' (server default). */
+  timezone: string;
+  /** 'HH:MM' 24h, or null when the daily nudge is off. */
+  nudgeTime: string | null;
 }
 
 export function useMe() {

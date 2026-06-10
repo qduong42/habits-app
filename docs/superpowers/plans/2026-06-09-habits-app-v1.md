@@ -626,8 +626,8 @@ Definitions: recurring `overdue` = `nextDue <= now` for one-offs `dueDate < toda
 - Create: `server/src/settings/routes.ts`; Modify: `server/src/app.ts`, `web/src/pages/Profile.tsx`
 - Test: `server/test/settings.test.ts`
 
-- [ ] **Step 1: TDD** — `PUT /api/me/settings {nudgeTime: '21:30' | null, timezone: 'Europe/Berlin'}` zod-validated (HH:MM regex, `Intl.supportedValuesOf('timeZone')` check), persists, `GET /auth/me` returns them.
-- [ ] **Step 2: Profile UI** — time input + on/off switch, timezone select (default Europe/Berlin), logout button. Logout must `queryClient.clear()` after `POST /auth/logout` (the `['me']` cache has 5-min staleTime — without clearing, logout→login-as-other renders the previous user). Verify + commit: `feat: nudge and timezone settings`
+- [x] **Step 1: TDD** — `PUT /api/me/settings {nudgeTime: '21:30' | null, timezone: 'Europe/Berlin'}` zod-validated (HH:MM regex, `Intl.supportedValuesOf('timeZone')` check), persists, `GET /auth/me` returns them.
+- [x] **Step 2: Profile UI** — time input + on/off switch, timezone select (default Europe/Berlin), logout button. Logout must `queryClient.clear()` after `POST /auth/logout` (the `['me']` cache has 5-min staleTime — without clearing, logout→login-as-other renders the previous user). Verify + commit: `feat: nudge and timezone settings`
 
 ### Task 20: PWA (manifest + service worker)
 

@@ -107,7 +107,7 @@ describe('auth', () => {
       expect(res.body.error.code).toBe('unauthenticated');
     });
 
-    it('returns {id,name} with a valid login cookie', async () => {
+    it('returns {id,name,timezone,nudgeTime} with a valid login cookie', async () => {
       const login = await request(app)
         .post('/api/auth/login')
         .send({ name: TEST_NAME, password: TEST_PASSWORD });
@@ -118,6 +118,8 @@ describe('auth', () => {
       expect(res.status).toBe(200);
       expect(res.body.name).toBe(TEST_NAME);
       expect(res.body.id).toBe(login.body.id);
+      expect(res.body.timezone).toBe('Europe/Berlin'); // schema default
+      expect(res.body.nudgeTime).toBeNull(); // no nudge configured yet
     });
   });
 
