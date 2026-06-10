@@ -1,28 +1,26 @@
-# Current Progress — habits-app (updated 2026-06-10 10:30, paused by Huy)
+# Current Progress — habits-app (updated 2026-06-10, v1.1 implemented)
 
-Branch `feat/habits-app-v1`, all work committed + pushed. Dev server may be running locally on :3001 (`SERVE_STATIC=1 PORT=3001 npx tsx server/src/index.ts`, postgres via `docker compose up -d --wait postgres`). Logins: huy/lea, password `changeme123` (SEED_PASSWORD default).
+Dev server may be running locally on :3001 (`SERVE_STATIC=1 PORT=3001 npx tsx server/src/index.ts`, postgres via `docker compose up -d --wait postgres`). Logins: huy/lea, password `changeme123` (SEED_PASSWORD default).
 
-## Done: 26 of 28 plan tasks (Tasks 0–21 + 25–27)
+## v1: DONE — merged to master via PR #1
 
-Full overnight AFK loop (fresh subagent per task + spec review + quality review + fix loops). 234 server tests, verify/lint green at HEAD. Source of truth for task state: the checkboxes in `docs/superpowers/plans/2026-06-09-habits-app-v1.md`.
+All 28 tasks of `docs/superpowers/plans/2026-06-09-habits-app-v1.md` complete (incl. production compose/README, refactor pass, overnight QA report at `docs/superpowers/ralph/QA-REPORT.md`); merge commit `211f8a1`.
 
-Working today: auth, habits CRUD + Today checklist (category groups), check-in/undo with XP/levels/streaks/achievements (race-hardened with user-row locks), Dump capture + card-by-card triage → one-off/recurring tasks (reset-on-completion, sub-daily OK) or habits, 📌 Tasks section on Today (+ ⏳ Scheduled toggle), Stats, settings (nudge time/TZ), PWA (installable, injectManifest SW), web push + daily nudge job (needs VAPID keys, see README).
+Working: auth, habits CRUD + Today checklist (category groups), check-in/undo with XP/levels/streaks/achievements (race-hardened with user-row locks), Dump capture + card-by-card triage → one-off/recurring tasks (reset-on-completion, sub-daily OK) or habits, Tasks on Today (+ ⏳ Scheduled toggle), Stats, settings (nudge time/TZ), PWA (installable, injectManifest SW), web push + daily nudge job (needs VAPID keys, see README).
 
-## Remaining plan work (resume with subagent-driven-development, one task at a time)
+## v1.1: implemented on `feat/v1.1-dump-and-today` — awaiting PR/merge (Huy's call)
 
-1. **Task 22 — Production compose + README**: a full dispatch prompt was already drafted; key points: multi-stage server/Dockerfile (mind WEB_DIST relative resolution in server/src/app.ts and cwd-relative ./drizzle in migrate.ts), compose `api` service (host port 3002 — dev server holds 3001; env incl. optional VAPID trio), expand README (keep Push setup section), smoke via curl, leave postgres running.
-2. **Task 23 — Refactor pass**: big queued carry-over list is IN the plan's Task 23 text (indexes, listTasks DISTINCT ON, level/undo dedup, parseBody, CategoryContract direction, convertItem/convertItemToTask fold, web sheet/ActionSheet/optimistic-toggle dedup, checkbox roles, ['stats'] invalidation on mutations, settings polish). No behavior changes; verify green before/after.
-3. **Task 24 — QA report**: full suite + curl flows → docs/superpowers/ralph/QA-REPORT.md. RULE: smoke flows must use a THROWAWAY user, never seeded huy/lea (see current_issues.md — achievement pollution incident).
+Plan: `docs/superpowers/plans/2026-06-10-v1.1-dump-and-today.md` (all tasks ticked). Decisions: `new_features.md` (each entry now carries a "Shipped in v1.1" line). The three features:
 
-## New features (grilled 2026-06-10, NOT implemented — decisions in new_features.md)
+1. **Discard with optional answer note** — `discard_note` column + `POST /inbox/:id/discard {note?}` (≤2000, trimmed, empty → null); inline note input replaces `window.confirm` in both Dump list and TriageCard.
+2. **Dump task-first quick action + braindump History** — → Task (FIRST) converts immediately to a one-off undated task; History section groups all triaged items by dump date (lazy `?all=1` fetch), shows discard notes and "converted (since deleted)".
+3. **Today two-section split** — ✅ Tasks / 🌱 Habits mega-sections with tinted containers; category sub-headers stay inside Habits.
 
-- Today two-section split (✅ Tasks / 🌱 Habits) + "→ Task" first quick action on Dump items (chores-vs-practices boundary, CONTEXT.md).
-- Braindump History: all triaged items, grouped by dump date, collapsed dates expand. No schema change.
-When Huy says go: brainstorm is already done — go straight to writing-plans for these two, then execute.
+Mini QA 2026-06-10: curl smoke on a private server against `habits_test` with a throwaway user (discard-with-note visible in `?all=1`; quick convert-task {name only} → oneoff/undated task, item linked; empty-body discard → null note). All rows cleaned up incl. `user_achievements`; `npm run verify` green.
 
-## Open issues
+## Backlog
 
-See `current_issues.md` (Bright Idea incident resolved + minor polish list, mostly folded into Task 23).
+Only the minor polish list in `current_issues.md` (Bright Idea incident resolved; remaining items are small UX/perf polish).
 
 ## Process notes
 

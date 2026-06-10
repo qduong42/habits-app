@@ -1,4 +1,4 @@
-# New Features (grilled, NOT yet implemented)
+# New Features (grilled; shipped status noted per entry)
 
 Decisions resolved via grill-with-docs sessions; domain language in `CONTEXT.md`. Append new entries with date/time.
 
@@ -13,6 +13,8 @@ From live usage: the Task/Habit distinction is too subtle, and the Dump's quick 
 
 **Implementation notes for the planner:** mostly `web/src/pages/Today.tsx` + `index.css` (the 📌 Tasks section already exists and only needs visual promotion); Dump quick action needs a small inline once/recurring picker or defaults to one-off undated with edit affordance — decide at plan time.
 
+**Shipped in v1.1, 2026-06-10** (branch `feat/v1.1-dump-and-today`; → Task converts immediately to a one-off undated task, scheduling later via Edit/Triage).
+
 ## 2026-06-10 10:21 — Dump: braindump History (by dump date)
 
 **Decisions (grilled):**
@@ -22,6 +24,8 @@ From live usage: the Task/Habit distinction is too subtle, and the Dump's quick 
 - Data caveat the UI must tolerate: converted items whose task/habit was later deleted have `status: 'converted'` with both links null (FK ON DELETE SET NULL) — show as "converted (since deleted)".
 
 **Implementation notes:** `GET /inbox?all=1` already returns everything; likely wants a grouped variant or client-side grouping; no migration needed.
+
+**Shipped in v1.1, 2026-06-10** (branch `feat/v1.1-dump-and-today`; client-side grouping over lazily fetched `?all=1`).
 
 ## 2026-06-10 11:49 — Discard with optional answer note
 
@@ -33,3 +37,5 @@ Sometimes a dumped question gets answered at triage time ("sasi teeth is ok?" �
 - Surfaces in the braindump **History** under the item: "sasi teeth is ok? — 🗑 yes, dentist said fine". The History UI (feature above) must render it.
 
 **Implementation notes:** extend `POST /inbox/:id/discard` body `{note?}` (zod, cap ~2000); inline input replacing the current `window.confirm` (the prompt itself becomes the confirm — Enter discards, Escape cancels); InboxItem contract gains `discardNote: string | null`.
+
+**Shipped in v1.1, 2026-06-10** (branch `feat/v1.1-dump-and-today`; `discard_note` migration, note ≤2000 trimmed, empty → null).
