@@ -4,7 +4,8 @@ import { eq } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { users } from '../db/schema.js';
 import { HttpError } from '../errors.js';
-import { requireAuth, type AuthedRequest } from '../auth/middleware.js';
+import { requireAuth } from '../auth/middleware.js';
+import { parseBody, userIdOf } from '../validation.js';
 import { rescheduleNudge } from '../push/scheduler.js';
 
 // IANA zone names the runtime actually supports — the only valid timezones.
@@ -39,16 +40,8 @@ settingsRouter.use(requireAuth);
 
 // PUT /api/me/settings — partial update of {nudgeTime, timezone}.
 settingsRouter.put('/settings', async (req, res) => {
-  const parsed = settingsSchema.safeParse(req.body);
-  if (!parsed.success) {
-    throw new HttpError(
-      400,
-      'validation',
-      parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
-    );
-  }
-  const { userId } = req as AuthedRequest;
-  const { nudgeTime, timezone } = parsed.data;
+  const { nudgeTime, timezone } = parseBody(settingsSchema, req.body);
+  const userId = userIdOf(req);
 
   const [updated] = await db
     .update(users)

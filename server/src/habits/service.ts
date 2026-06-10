@@ -3,15 +3,18 @@ import { db } from '../db/client.js';
 import { categories, checkins, habits, users } from '../db/schema.js';
 import type { Category, Habit } from '../db/schema.js';
 import { isoWeekOf, localDateFor } from '../game/dates.js';
-import { checkinXp, levelFromXp } from '../game/xp.js';
-import { dailyStreak, weeklyStreak } from '../game/streaks.js';
-import { adjustXp, awardAchievements, lockUserRow } from '../game/rewards.js';
-import type { Tx, UnlockedAchievement } from '../game/rewards.js';
+import { checkinXp } from '../game/xp.js';
+import { dailyStreak, weekCounts, weeklyStreak } from '../game/streaks.js';
+import { awardAchievements, awardXp, chargeUndo, lockUserRow } from '../game/rewards.js';
+import type { Tx, UndoResult, UnlockedAchievement, XpAward } from '../game/rewards.js';
+import { toCategoryContract } from '../categories/service.js';
+import type { CategoryContract } from '../categories/service.js';
 import { HttpError } from '../errors.js';
 
-// Re-exported for existing importers (inbox/service.ts, tests); the
-// definition moved to game/rewards.ts with the shared reward helpers.
-export type { UnlockedAchievement } from '../game/rewards.js';
+// Re-exported for existing importers; the definitions live with the shared
+// reward helpers (game/rewards.ts) and the categories service respectively.
+export type { UndoResult, UnlockedAchievement } from '../game/rewards.js';
+export type { CategoryContract } from '../categories/service.js';
 
 /**
  * Either the pool-backed `db` or a transaction handle. The habit-creation
@@ -20,15 +23,7 @@ export type { UnlockedAchievement } from '../game/rewards.js';
  */
 export type DbOrTx = typeof db | Tx;
 
-/** Shared API contract shapes (plan: "Shared API contracts"). */
-export interface CategoryContract {
-  id: string;
-  name: string;
-  emoji: string;
-  color: string;
-  builtin: boolean;
-}
-
+/** Shared API contract shape (plan: "Shared API contracts"). */
 export interface HabitContract {
   id: string;
   name: string;
@@ -69,17 +64,8 @@ function isUniqueViolation(err: unknown, constraint: string): boolean {
   return cause?.code === '23505' && cause?.constraint === constraint;
 }
 
-/** Checkins-per-ISO-week counts for one habit's dates (weeklyStreak input). */
-function weekCounts(dates: ReadonlySet<string>): Map<string, number> {
-  const counts = new Map<string, number>();
-  for (const d of dates) {
-    const week = isoWeekOf(d);
-    counts.set(week, (counts.get(week) ?? 0) + 1);
-  }
-  return counts;
-}
-
-function habitStreakOf(
+/** Current streak per the habit's frequency — shared with stats/service.ts. */
+export function habitStreakOf(
   habit: Pick<Habit, 'frequencyType' | 'weeklyTarget'>,
   dates: Set<string>,
   today: string,
@@ -111,13 +97,7 @@ function toContract(
     name: habit.name,
     notes: habit.notes,
     sourceUrl: habit.sourceUrl,
-    category: {
-      id: category.id,
-      name: category.name,
-      emoji: category.emoji,
-      color: category.color,
-      builtin: category.userId === null,
-    },
+    category: toCategoryContract(category),
     frequencyType: habit.frequencyType,
     weeklyTarget: habit.weeklyTarget,
     scheduledToday,
@@ -287,31 +267,9 @@ export async function archiveHabit(userId: string, habitId: string): Promise<voi
 }
 
 /** POST /habits/:id/checkin contract (plan: "Shared API contracts"). */
-export interface CheckinResult {
-  xpGained: number;
-  xpTotal: number;
-  level: number;
-  leveledUp: boolean;
+export interface CheckinResult extends XpAward {
   habitStreak: number;
   unlockedAchievements: UnlockedAchievement[];
-}
-
-/**
- * DELETE /habits/:id/checkin response. Additive extension over the original
- * `{ok: true}` so the frontend (Task 14) can roll the XP bar back without a
- * refetch.
- */
-export interface UndoResult {
-  ok: true;
-  /**
-   * What the undo charged for. NOTE: when the GREATEST(…, 0) floor in
-   * adjustXp clamps, `xpLost` may exceed the amount actually deducted —
-   * clients must trust `xpTotal` as the new balance, never compute
-   * `previous - xpLost`.
-   */
-  xpLost: number;
-  xpTotal: number;
-  level: number;
 }
 
 async function ownedHabit(tx: Tx, userId: string, habitId: string): Promise<Habit> {
@@ -416,21 +374,18 @@ export async function checkinHabit(userId: string, habitId: string): Promise<Che
       const completesDay = allScheduledDone(activeHabits, datesByHabit, today);
       const habitStreak = habitStreakOf(habit, datesByHabit.get(habitId) ?? new Set(), today);
 
-      const xpGained = checkinXp({ completesDay });
-      const xpTotal = await adjustXp(tx, userId, xpGained);
-      const level = levelFromXp(xpTotal);
-      const leveledUp = level > levelFromXp(xpTotal - xpGained);
+      const award = await awardXp(tx, userId, checkinXp({ completesDay }));
 
       // Achievement ctx — all post-insert, level post-increment; the shared
       // helper reuses the already-loaded check-in rows.
       const unlockedAchievements: UnlockedAchievement[] = await awardAchievements(tx, userId, {
         today,
-        level,
+        level: award.level,
         habitStreak,
         checkinRows,
       });
 
-      return { xpGained, xpTotal, level, leveledUp, habitStreak, unlockedAchievements };
+      return { ...award, habitStreak, unlockedAchievements };
     });
   } catch (err) {
     if (isUniqueViolation(err, 'uniq_checkin_per_day')) {
@@ -484,9 +439,7 @@ export async function undoCheckin(userId: string, habitId: string): Promise<Undo
     beforeDelete.set(habitId, new Set([...(datesByHabit.get(habitId) ?? [])]).add(today));
     const wasComplete = allScheduledDone(activeHabits, beforeDelete, today);
 
-    const xpLost = checkinXp({ completesDay: wasComplete && !nowComplete });
-    const xpTotal = await adjustXp(tx, userId, -xpLost);
-    return { ok: true, xpLost, xpTotal, level: levelFromXp(xpTotal) };
+    return chargeUndo(tx, userId, checkinXp({ completesDay: wasComplete && !nowComplete }));
   });
 }
 

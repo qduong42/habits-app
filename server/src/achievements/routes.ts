@@ -6,7 +6,8 @@ import { Router } from 'express';
 import { and, eq } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { achievements, userAchievements } from '../db/schema.js';
-import { requireAuth, type AuthedRequest } from '../auth/middleware.js';
+import { requireAuth } from '../auth/middleware.js';
+import { userIdOf } from '../validation.js';
 import { ACHIEVEMENT_CATALOG } from '../game/achievements.js';
 
 // The DB table has no order column — catalog order comes from the in-code
@@ -18,7 +19,7 @@ export const achievementsRouter = Router();
 achievementsRouter.use(requireAuth);
 
 achievementsRouter.get('/', async (req, res) => {
-  const userId = (req as AuthedRequest).userId;
+  const userId = userIdOf(req);
   const rows = await db
     .select({
       id: achievements.id,

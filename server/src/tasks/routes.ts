@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { HttpError } from '../errors.js';
-import { requireAuth, type AuthedRequest } from '../auth/middleware.js';
+import { requireAuth } from '../auth/middleware.js';
+import { parseBody, userIdOf, uuidParam } from '../validation.js';
 import {
   completeTask,
   createTask,
@@ -44,31 +44,7 @@ const patchSchema = z.object({
   intervalHours: intervalSchema.nullable().optional(),
 });
 
-function parseBody<T>(schema: z.ZodType<T>, body: unknown): T {
-  const parsed = schema.safeParse(body);
-  if (!parsed.success) {
-    throw new HttpError(
-      400,
-      'validation',
-      parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
-    );
-  }
-  return parsed.data;
-}
-
-// Express 5: an invalid uuid reaching a pg uuid column throws — validate the
-// param up front and map straight to the 404 envelope (not a 500).
-function taskId(raw: string): string {
-  const parsed = z.uuid().safeParse(raw);
-  if (!parsed.success) throw new HttpError(404, 'not_found', 'Task not found');
-  return parsed.data;
-}
-
-// requireAuth (mounted router-wide above) guarantees userId; the cast goes via
-// unknown because parameterized Request<{id}> doesn't overlap AuthedRequest.
-function userIdOf(req: unknown): string {
-  return (req as AuthedRequest).userId;
-}
+const taskId = (raw: string) => uuidParam(raw, 'Task not found');
 
 export const tasksRouter = Router();
 

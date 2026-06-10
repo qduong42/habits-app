@@ -10,6 +10,7 @@ import {
   date,
   unique,
   primaryKey,
+  index,
 } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
@@ -76,32 +77,41 @@ export type Checkin = typeof checkins.$inferSelect;
  * - recurring: `intervalHours` set (>= 1); `nextDue` = last completion +
  *   interval (creation time + interval initially); never terminal.
  */
-export const tasks = pgTable('tasks', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  userId: uuid('user_id').notNull().references(() => users.id),
-  name: text('name').notNull(),
-  notes: text('notes'),
-  sourceUrl: text('source_url'),
-  dueDate: date('due_date'), // one-off only, optional
-  intervalHours: numeric('interval_hours', { mode: 'number' }), // set = recurring
-  nextDue: timestamp('next_due', { withTimezone: true }), // recurring only
-  completedAt: timestamp('completed_at', { withTimezone: true }), // one-off terminal
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const tasks = pgTable(
+  'tasks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => users.id),
+    name: text('name').notNull(),
+    notes: text('notes'),
+    sourceUrl: text('source_url'),
+    dueDate: date('due_date'), // one-off only, optional
+    intervalHours: numeric('interval_hours', { mode: 'number' }), // set = recurring
+    nextDue: timestamp('next_due', { withTimezone: true }), // recurring only
+    completedAt: timestamp('completed_at', { withTimezone: true }), // one-off terminal
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('idx_tasks_user_id').on(t.userId)],
+);
 
 export type Task = typeof tasks.$inferSelect;
 
 // NO unique constraint on (task_id, local_date): sub-daily recurring tasks
 // legitimately complete multiple times per local date (ADR-0001).
-export const taskCompletions = pgTable('task_completions', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  taskId: uuid('task_id')
-    .notNull()
-    .references(() => tasks.id, { onDelete: 'cascade' }),
-  userId: uuid('user_id').notNull().references(() => users.id),
-  localDate: date('local_date').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const taskCompletions = pgTable(
+  'task_completions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    taskId: uuid('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull().references(() => users.id),
+    localDate: date('local_date').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  // latest-completion-per-task lookups (listTasks DISTINCT ON, undo re-anchor)
+  (t) => [index('idx_task_completions_task_created').on(t.taskId, t.createdAt)],
+);
 
 export type TaskCompletion = typeof taskCompletions.$inferSelect;
 

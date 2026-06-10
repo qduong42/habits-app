@@ -5,7 +5,7 @@ import type { InboxItem } from '../db/schema.js';
 import { localDateFor } from '../game/dates.js';
 import { levelFromXp } from '../game/xp.js';
 import { awardAchievements, lockUserRow } from '../game/rewards.js';
-import type { UnlockedAchievement } from '../game/rewards.js';
+import type { Tx, UnlockedAchievement } from '../game/rewards.js';
 import { HttpError } from '../errors.js';
 import { createHabit } from '../habits/service.js';
 import type { CreateHabitInput, HabitContract } from '../habits/service.js';
@@ -86,11 +86,21 @@ export async function listItems(userId: string, all: boolean): Promise<InboxItem
   return rows.map(toContract);
 }
 
-export async function convertItem(
+/**
+ * The shared triage transaction: lock-first, load the open item, create the
+ * target (habit or task) through the EXISTING service path inside THIS
+ * transaction — a failure rolls the whole conversion back — then close the
+ * item and run the achievement check. `createTarget` returns the created
+ * contract plus the link column to set on the item.
+ */
+async function triageInto<T>(
   userId: string,
   itemId: string,
-  input: ConvertInput,
-): Promise<ConvertResult> {
+  createTarget: (
+    tx: Tx,
+    item: InboxItem,
+  ) => Promise<{ target: T; link: { habitId: string } | { taskId: string } }>,
+): Promise<{ item: InboxItemContract; target: T; unlockedAchievements: UnlockedAchievement[] }> {
   return db.transaction(async (tx) => {
     // Row lock FIRST (rewards.ts lockUserRow comment explains why): the
     // conversions count and achievement thresholds below can't race a
@@ -104,25 +114,14 @@ export async function convertItem(
     if (!item) throw notFound();
     if (item.status !== 'open') throw alreadyTriaged();
 
-    // Habit creation rides the EXISTING service path (category-usable check,
-    // weekly-target rules) inside THIS transaction — a failure rolls the
-    // whole conversion back.
-    const habit = await createHabit(
-      userId,
-      {
-        ...input,
-        notes: input.notes ?? item.text, // the dump text stays attached as the "why"
-        sourceUrl: item.sourceUrl ?? undefined,
-      },
-      tx,
-    );
+    const { target, link } = await createTarget(tx, item);
 
     // status='open' predicate keeps the transition atomic even against a
     // concurrent discard (which runs outside this lock): losing the race
-    // matches 0 rows → 409, rolling back the habit insert above.
+    // matches 0 rows → 409, rolling back the habit/task insert above.
     const [updated] = await tx
       .update(inboxItems)
-      .set({ status: 'converted', habitId: habit.id })
+      .set({ status: 'converted', ...link })
       .where(and(eq(inboxItems.id, item.id), eq(inboxItems.status, 'open')))
       .returning();
     if (!updated) throw alreadyTriaged();
@@ -132,59 +131,63 @@ export async function convertItem(
       today: localDateFor(user.timezone),
       level: levelFromXp(user.xpTotal),
     });
-    return { item: toContract(updated), habit, unlockedAchievements };
+    return { item: toContract(updated), target, unlockedAchievements };
   });
 }
 
+/** Triage a dump item into a habit (POST /inbox/:id/convert). */
+export async function convertItem(
+  userId: string,
+  itemId: string,
+  input: ConvertInput,
+): Promise<ConvertResult> {
+  const { item, target, unlockedAchievements } = await triageInto(
+    userId,
+    itemId,
+    async (tx, dumpItem) => {
+      const habit = await createHabit(
+        userId,
+        {
+          ...input,
+          notes: input.notes ?? dumpItem.text, // the dump text stays attached as the "why"
+          sourceUrl: dumpItem.sourceUrl ?? undefined,
+        },
+        tx,
+      );
+      return { target: habit, link: { habitId: habit.id } };
+    },
+  );
+  return { item, habit: target, unlockedAchievements };
+}
+
 /**
- * Triage a dump item into a one-off or recurring task (Task 27). Mirrors
- * convertItem above exactly — same lock-first transaction, same 404/409
- * semantics, same notes/sourceUrl carry-over, same achievement context (the
- * conversions count treats habit and task conversions identically because it
- * only looks at status='converted').
+ * Triage a dump item into a one-off or recurring task (Task 27). Same
+ * transaction, 404/409 semantics, notes/sourceUrl carry-over and achievement
+ * context as the habit convert (the conversions count treats habit and task
+ * conversions identically because it only looks at status='converted').
  */
 export async function convertItemToTask(
   userId: string,
   itemId: string,
   input: ConvertTaskInput,
 ): Promise<ConvertTaskResult> {
-  return db.transaction(async (tx) => {
-    // Row lock FIRST (rewards.ts lockUserRow comment explains why).
-    const user = await lockUserRow(tx, userId);
-
-    const [item] = await tx
-      .select()
-      .from(inboxItems)
-      .where(and(eq(inboxItems.id, itemId), eq(inboxItems.userId, userId)));
-    if (!item) throw notFound();
-    if (item.status !== 'open') throw alreadyTriaged();
-
-    // Task creation rides the EXISTING service path inside THIS transaction.
-    const task = await createTask(
-      userId,
-      {
-        ...input,
-        notes: input.notes ?? item.text, // the dump text stays attached as the "why"
-        sourceUrl: item.sourceUrl ?? undefined,
-      },
-      tx,
-    );
-
-    // status='open' predicate: same concurrent-discard race guard as convertItem.
-    const [updated] = await tx
-      .update(inboxItems)
-      .set({ status: 'converted', taskId: task.id }) // habitId stays null
-      .where(and(eq(inboxItems.id, item.id), eq(inboxItems.status, 'open')))
-      .returning();
-    if (!updated) throw alreadyTriaged();
-
-    // Conversion grants no XP, so level comes straight from the locked row.
-    const unlockedAchievements: UnlockedAchievement[] = await awardAchievements(tx, userId, {
-      today: localDateFor(user.timezone),
-      level: levelFromXp(user.xpTotal),
-    });
-    return { item: toContract(updated), task, unlockedAchievements };
-  });
+  const { item, target, unlockedAchievements } = await triageInto(
+    userId,
+    itemId,
+    async (tx, dumpItem) => {
+      const task = await createTask(
+        userId,
+        {
+          ...input,
+          notes: input.notes ?? dumpItem.text, // the dump text stays attached as the "why"
+          sourceUrl: dumpItem.sourceUrl ?? undefined,
+        },
+        tx,
+      );
+      return { target: task, link: { taskId: task.id } }; // habitId stays null
+    },
+  );
+  return { item, task: target, unlockedAchievements };
 }
 
 /** Discard is allowed only from 'open' — the conditional update makes it atomic. */

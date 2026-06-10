@@ -4,7 +4,20 @@
  * week never breaks a streak — it only counts once it qualifies.
  */
 
-import { addDays, prevIsoWeek } from './dates.js';
+import { addDays, isoWeekOf, prevIsoWeek } from './dates.js';
+
+/**
+ * Check-ins-per-ISO-week counts for one habit's dates — the weeklyStreak /
+ * bestWeeklyStreak input (shared by habits/service.ts and stats/service.ts).
+ */
+export function weekCounts(dates: ReadonlySet<string>): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const d of dates) {
+    const week = isoWeekOf(d);
+    counts.set(week, (counts.get(week) ?? 0) + 1);
+  }
+  return counts;
+}
 
 /** Consecutive days in `dates` ending at `end` (inclusive), walking backwards. */
 function runEndingAt(dates: Set<string>, end: string): number {

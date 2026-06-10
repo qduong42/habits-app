@@ -3,7 +3,15 @@ import { db } from '../db/client.js';
 import { categories } from '../db/schema.js';
 import type { Category } from '../db/schema.js';
 import { HttpError } from '../errors.js';
-import type { CategoryContract } from '../habits/service.js';
+
+/** Shared API contract shape (plan: "Shared API contracts"). */
+export interface CategoryContract {
+  id: string;
+  name: string;
+  emoji: string;
+  color: string;
+  builtin: boolean;
+}
 
 export interface CreateCategoryInput {
   name: string;
@@ -11,7 +19,8 @@ export interface CreateCategoryInput {
   color: string;
 }
 
-function toContract(category: Category): CategoryContract {
+/** Exported: the habit contract embeds a category (habits/service.ts). */
+export function toCategoryContract(category: Category): CategoryContract {
   return {
     id: category.id,
     name: category.name,
@@ -33,7 +42,7 @@ export async function listCategories(userId: string): Promise<CategoryContract[]
     // Builtins first (false sorts before true ascending), then by name —
     // stable order for the category select in the UI.
     .orderBy(sql`${categories.userId} is not null`, categories.name);
-  return rows.map(toContract);
+  return rows.map(toCategoryContract);
 }
 
 export async function createCategory(
@@ -55,5 +64,5 @@ export async function createCategory(
     .insert(categories)
     .values({ userId, name: input.name, emoji: input.emoji, color: input.color })
     .returning();
-  return toContract(created!);
+  return toCategoryContract(created!);
 }

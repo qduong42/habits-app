@@ -9,10 +9,10 @@ import { levelFromXp } from '../game/xp.js';
 import {
   bestDailyStreak,
   bestWeeklyStreak,
-  dailyStreak,
   dayStreak,
-  weeklyStreak,
+  weekCounts,
 } from '../game/streaks.js';
+import { habitStreakOf } from '../habits/service.js';
 import { HttpError } from '../errors.js';
 
 /** GET /stats contract (plan: "Shared API contracts"). */
@@ -33,16 +33,6 @@ export interface Stats {
   xpTotal: number;
   level: number;
   habits: StatsHabit[];
-}
-
-/** Checkins-per-ISO-week counts (same shape habits/service feeds weeklyStreak). */
-function weekCounts(dates: ReadonlySet<string>): Map<string, number> {
-  const counts = new Map<string, number>();
-  for (const d of dates) {
-    const week = isoWeekOf(d);
-    counts.set(week, (counts.get(week) ?? 0) + 1);
-  }
-  return counts;
 }
 
 /**
@@ -113,23 +103,20 @@ export async function getStats(userId: string): Promise<Stats> {
 
   const habitStats: StatsHabit[] = rows.map(({ habit, category }) => {
     const dates = datesByHabit.get(habit.id) ?? new Set<string>();
+    const base = {
+      id: habit.id,
+      name: habit.name,
+      emoji: category.emoji,
+      // Same current-streak rule the Today list shows (habits/service.ts).
+      streak: habitStreakOf(habit, dates, today),
+    };
     if (habit.frequencyType === 'daily') {
-      return {
-        id: habit.id,
-        name: habit.name,
-        emoji: category.emoji,
-        streak: dailyStreak(dates, today),
-        bestStreak: bestDailyStreak(dates),
-        last28: last28Daily(dates, today),
-      };
+      return { ...base, bestStreak: bestDailyStreak(dates), last28: last28Daily(dates, today) };
     }
     const counts = weekCounts(dates);
     const target = habit.weeklyTarget ?? 0;
     return {
-      id: habit.id,
-      name: habit.name,
-      emoji: category.emoji,
-      streak: weeklyStreak(counts, target, isoWeekOf(today)),
+      ...base,
       bestStreak: bestWeeklyStreak(counts, target),
       last28: last28Weekly(counts, target, today),
     };

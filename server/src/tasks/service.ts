@@ -3,11 +3,11 @@ import { db } from '../db/client.js';
 import { taskCompletions, tasks, users } from '../db/schema.js';
 import type { Task } from '../db/schema.js';
 import { localDateFor } from '../game/dates.js';
-import { levelFromXp, TASK_COMPLETION_XP } from '../game/xp.js';
+import { TASK_COMPLETION_XP } from '../game/xp.js';
 import { dueLabel, taskGroup } from '../game/dueness.js';
 import type { TaskContractGroup } from '../game/dueness.js';
-import { adjustXp, awardAchievements, lockUserRow } from '../game/rewards.js';
-import type { Tx, UnlockedAchievement } from '../game/rewards.js';
+import { awardAchievements, awardXp, chargeUndo, lockUserRow } from '../game/rewards.js';
+import type { Tx, UndoResult, UnlockedAchievement, XpAward } from '../game/rewards.js';
 import { HttpError } from '../errors.js';
 
 const HOUR_MS = 3_600_000;
@@ -52,22 +52,13 @@ export interface UpdateTaskInput {
 }
 
 /** POST /tasks/:id/complete contract (plan: "Shared API contracts"). */
-export interface CompleteResult {
-  xpGained: number;
-  xpTotal: number;
-  level: number;
-  leveledUp: boolean;
+export interface CompleteResult extends XpAward {
   nextDue: string | null; // recurring only; null for one-offs
   unlockedAchievements: UnlockedAchievement[];
 }
 
 /** DELETE /tasks/:id/complete — same shape as the habit check-in undo. */
-export interface UndoCompleteResult {
-  ok: true;
-  xpLost: number;
-  xpTotal: number;
-  level: number;
-}
+export type UndoCompleteResult = UndoResult;
 
 type DbOrTx = typeof db | Tx;
 
@@ -178,19 +169,18 @@ export async function listTasks(
   const today = localDateFor(tz, now);
 
   const rows = await db.select().from(tasks).where(eq(tasks.userId, userId));
-  // Latest completion localDate per task (newest row first wins).
+  // Latest completion localDate per task — DISTINCT ON keeps the first row
+  // per task_id under the order below (newest createdAt, id tiebreaker), so
+  // only one row per task crosses the wire instead of the full history.
   const completionRows = await db
-    .select({
+    .selectDistinctOn([taskCompletions.taskId], {
       taskId: taskCompletions.taskId,
       localDate: taskCompletions.localDate,
     })
     .from(taskCompletions)
     .where(eq(taskCompletions.userId, userId))
-    .orderBy(desc(taskCompletions.createdAt), desc(taskCompletions.id));
-  const latestLocalDateByTask = new Map<string, string>();
-  for (const c of completionRows) {
-    if (!latestLocalDateByTask.has(c.taskId)) latestLocalDateByTask.set(c.taskId, c.localDate);
-  }
+    .orderBy(taskCompletions.taskId, desc(taskCompletions.createdAt), desc(taskCompletions.id));
+  const latestLocalDateByTask = new Map(completionRows.map((c) => [c.taskId, c.localDate]));
 
   return rows
     .map((task) => ({
@@ -329,21 +319,18 @@ export async function completeTask(userId: string, taskId: string): Promise<Comp
       await tx.update(tasks).set({ completedAt: now }).where(eq(tasks.id, taskId));
     }
 
-    const xpGained = TASK_COMPLETION_XP;
-    const xpTotal = await adjustXp(tx, userId, xpGained);
-    const level = levelFromXp(xpTotal);
-    const leveledUp = level > levelFromXp(xpTotal - xpGained);
+    const award = await awardXp(tx, userId, TASK_COMPLETION_XP);
 
     // Achievements stay habit-centric (totalCheckins/dayStreak count habit
     // check-ins, not task completions) — but task XP can cross level
     // thresholds, so the check runs with the post-increment level.
-    const unlockedAchievements = await awardAchievements(tx, userId, { today, level });
+    const unlockedAchievements = await awardAchievements(tx, userId, {
+      today,
+      level: award.level,
+    });
 
     return {
-      xpGained,
-      xpTotal,
-      level,
-      leveledUp,
+      ...award,
       nextDue: nextDue ? nextDue.toISOString() : null,
       unlockedAchievements,
     };
@@ -385,8 +372,6 @@ export async function undoCompleteTask(
       await tx.update(tasks).set({ completedAt: null }).where(eq(tasks.id, taskId));
     }
 
-    const xpLost = TASK_COMPLETION_XP;
-    const xpTotal = await adjustXp(tx, userId, -xpLost);
-    return { ok: true, xpLost, xpTotal, level: levelFromXp(xpTotal) };
+    return chargeUndo(tx, userId, TASK_COMPLETION_XP);
   });
 }

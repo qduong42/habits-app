@@ -7,6 +7,7 @@ import { db } from '../db/client.js';
 import { users } from '../db/schema.js';
 import { HttpError } from '../errors.js';
 import { JWT_SECRET, requireAuth, type AuthedRequest } from './middleware.js';
+import { parseBody } from '../validation.js';
 import { normalizeNudgeTime } from '../settings/routes.js';
 
 const THIRTY_DAYS_MS = 30 * 24 * 3600 * 1000;
@@ -30,15 +31,7 @@ const loginSchema = z.object({
 export const authRouter = Router();
 
 authRouter.post('/login', async (req, res) => {
-  const parsed = loginSchema.safeParse(req.body);
-  if (!parsed.success) {
-    throw new HttpError(
-      400,
-      'validation',
-      parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
-    );
-  }
-  const { name, password, rememberMe } = parsed.data;
+  const { name, password, rememberMe } = parseBody(loginSchema, req.body);
 
   const [user] = await db.select().from(users).where(eq(users.name, name));
   if (!user) {

@@ -11,7 +11,8 @@ import { eq } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { users } from '../db/schema.js';
 import { HttpError } from '../errors.js';
-import { requireAuth, type AuthedRequest } from '../auth/middleware.js';
+import { requireAuth } from '../auth/middleware.js';
+import { parseBody, userIdOf } from '../validation.js';
 import { vapidPublicKey } from './vapid.js';
 
 // Shape of PushSubscription.toJSON() (extra fields like expirationTime are
@@ -37,26 +38,17 @@ pushRouter.get('/vapid-public-key', (_req, res) => {
 });
 
 pushRouter.post('/subscribe', async (req, res) => {
-  const parsed = subscriptionSchema.safeParse(req.body);
-  if (!parsed.success) {
-    throw new HttpError(
-      400,
-      'validation',
-      parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
-    );
-  }
-  const { userId } = req as AuthedRequest;
+  const subscription = parseBody(subscriptionSchema, req.body);
   const updated = await db
     .update(users)
-    .set({ pushSubscription: parsed.data })
-    .where(eq(users.id, userId))
+    .set({ pushSubscription: subscription })
+    .where(eq(users.id, userIdOf(req)))
     .returning({ id: users.id });
   if (updated.length === 0) throw new HttpError(401, 'unauthenticated', 'Invalid session');
   res.json({ ok: true });
 });
 
 pushRouter.delete('/subscribe', async (req, res) => {
-  const { userId } = req as AuthedRequest;
-  await db.update(users).set({ pushSubscription: null }).where(eq(users.id, userId));
+  await db.update(users).set({ pushSubscription: null }).where(eq(users.id, userIdOf(req)));
   res.json({ ok: true });
 });

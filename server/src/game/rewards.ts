@@ -19,6 +19,7 @@ import {
   users,
 } from '../db/schema.js';
 import { dayStreak } from './streaks.js';
+import { levelFromXp } from './xp.js';
 import { checkAchievements } from './achievements.js';
 import { HttpError } from '../errors.js';
 
@@ -72,6 +73,47 @@ export async function adjustXp(tx: Tx, userId: string, delta: number): Promise<n
     .where(eq(users.id, userId))
     .returning({ xpTotal: users.xpTotal });
   return updated!.xpTotal;
+}
+
+/**
+ * The XP slice every reward response shares (check-in CheckinResult, task
+ * CompleteResult both extend it — plan "Shared API contracts").
+ */
+export interface XpAward {
+  xpGained: number;
+  xpTotal: number;
+  level: number;
+  leveledUp: boolean;
+}
+
+/** Apply `xpGained` and derive the shared {xpTotal, level, leveledUp} triple. */
+export async function awardXp(tx: Tx, userId: string, xpGained: number): Promise<XpAward> {
+  const xpTotal = await adjustXp(tx, userId, xpGained);
+  const level = levelFromXp(xpTotal);
+  return { xpGained, xpTotal, level, leveledUp: level > levelFromXp(xpTotal - xpGained) };
+}
+
+/**
+ * Shared undo response (habit check-in undo and task completion undo —
+ * identical shape per the plan's contracts).
+ */
+export interface UndoResult {
+  ok: true;
+  /**
+   * What the undo charged for. NOTE: when the GREATEST(…, 0) floor in
+   * adjustXp clamps, `xpLost` may exceed the amount actually deducted —
+   * clients must trust `xpTotal` as the new balance, never compute
+   * `previous - xpLost`.
+   */
+  xpLost: number;
+  xpTotal: number;
+  level: number;
+}
+
+/** Charge an undo: deduct `xpLost` (floored at 0) and build the response. */
+export async function chargeUndo(tx: Tx, userId: string, xpLost: number): Promise<UndoResult> {
+  const xpTotal = await adjustXp(tx, userId, -xpLost);
+  return { ok: true, xpLost, xpTotal, level: levelFromXp(xpTotal) };
 }
 
 /**
