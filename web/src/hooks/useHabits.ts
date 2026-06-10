@@ -1,11 +1,11 @@
-// React Query hooks for habits + categories. The check-in mutation is
-// optimistic: it flips doneToday in the cache immediately and rolls back on
-// error (except 409 already_done, where the optimistic state already matches
-// the server and the settle-time invalidation re-syncs everything).
+// React Query hooks for habits + categories. The check-in mutation rides the
+// shared optimistic-toggle plumbing (useOptimisticToggle): doneToday flips in
+// the cache immediately, rolls back on real errors, and 409 already_done
+// keeps the optimistic state (it already matches the server).
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ApiError, apiFetch } from '../api';
-import { useGame } from './useGame';
+import { apiFetch } from '../api';
+import { useOptimisticToggle } from './useOptimisticToggle';
 import type {
   Category,
   CategoryInput,
@@ -37,88 +37,44 @@ export interface CheckinVars {
   done: boolean;
 }
 
-interface CheckinContext {
-  previous: HabitsResponse | undefined;
-}
-
 /** Discriminate with `'xpGained' in result` (check-in) vs undo. */
 export type CheckinResult = CheckinResponse | UndoResponse;
 
 export function useCheckin() {
-  const queryClient = useQueryClient();
-  const { applyXp } = useGame();
-  return useMutation<CheckinResult, Error, CheckinVars, CheckinContext>({
-    // Shared key across all check-in/undo mutations so concurrent taps can be
-    // counted in onSettled (and so they dedupe-invalidate, see below).
-    mutationKey: ['checkin'],
+  return useOptimisticToggle<HabitsResponse, CheckinVars, CheckinResult>({
+    mutationKey: 'checkin',
+    queryKey: ['habits'],
     mutationFn: ({ habitId, done }) =>
       done
         ? apiFetch<CheckinResponse>(`/habits/${habitId}/checkin`, { method: 'POST' })
         : apiFetch<UndoResponse>(`/habits/${habitId}/checkin`, { method: 'DELETE' }),
-    onMutate: async ({ habitId, done }) => {
-      await queryClient.cancelQueries({ queryKey: ['habits'] });
-      const previous = queryClient.getQueryData<HabitsResponse>(['habits']);
-      queryClient.setQueryData<HabitsResponse>(['habits'], (old) =>
-        old === undefined
-          ? undefined
-          : {
-              ...old,
-              habits: old.habits.map((h) =>
-                h.id === habitId
-                  ? {
-                      ...h,
-                      doneToday: done,
-                      weekCount:
-                        h.frequencyType === 'weekly'
-                          ? Math.max(0, h.weekCount + (done ? 1 : -1))
-                          : h.weekCount,
-                      // Naive guess; the settle-time refetch corrects it.
-                      streak: Math.max(0, h.streak + (done ? 1 : -1)),
-                    }
-                  : h,
-              ),
-            },
-      );
-      return { previous };
-    },
-    // Both response shapes carry server-truth {xpTotal, level} — feed the
-    // GameContext so the XpBar tracks every check-in AND undo.
-    onSuccess: (res, { habitId }) => {
-      applyXp(res);
+    optimisticUpdate: (old, { habitId, done }) => ({
+      ...old,
+      habits: old.habits.map((h) =>
+        h.id === habitId
+          ? {
+              ...h,
+              doneToday: done,
+              weekCount:
+                h.frequencyType === 'weekly'
+                  ? Math.max(0, h.weekCount + (done ? 1 : -1))
+                  : h.weekCount,
+              // Naive guess; the settle-time refetch corrects it.
+              streak: Math.max(0, h.streak + (done ? 1 : -1)),
+            }
+          : h,
+      ),
+    }),
+    // Correct the optimistic streak guess with the server's number so the
+    // flame is right immediately (the settle-time refetch confirms it).
+    onServerSuccess: (res, { habitId }, patchCache) => {
       if ('habitStreak' in res) {
-        // Freshly unlocked badges should show in the Profile gallery without
-        // a manual refresh.
-        if (res.unlockedAchievements.length > 0) {
-          void queryClient.invalidateQueries({ queryKey: ['achievements'] });
-        }
-        // Correct the optimistic streak guess with the server's number so the
-        // flame is right immediately (the settle-time refetch confirms it).
-        queryClient.setQueryData<HabitsResponse>(['habits'], (old) =>
-          old === undefined
-            ? undefined
-            : {
-                ...old,
-                habits: old.habits.map((h) =>
-                  h.id === habitId ? { ...h, streak: res.habitStreak } : h,
-                ),
-              },
-        );
-      }
-    },
-    onError: (err, _vars, context) => {
-      // 409 already_done: the habit IS done — keep the optimistic "done" state
-      // and let onSettled's invalidation reconcile. Everything else (e.g. 400
-      // archived) rolls back to the snapshot.
-      if (err instanceof ApiError && err.code === 'already_done') return;
-      if (context?.previous !== undefined) {
-        queryClient.setQueryData(['habits'], context.previous);
-      }
-    },
-    onSettled: () => {
-      // Only the LAST in-flight check-in mutation invalidates; earlier ones
-      // settling would refetch mid-burst and flicker optimistic rows back.
-      if (queryClient.isMutating({ mutationKey: ['checkin'] }) === 1) {
-        queryClient.invalidateQueries({ queryKey: ['habits'] });
+        patchCache((old) => ({
+          ...old,
+          habits: old.habits.map((h) =>
+            h.id === habitId ? { ...h, streak: res.habitStreak } : h,
+          ),
+        }));
       }
     },
   });

@@ -1,10 +1,11 @@
 // Bottom-sheet task form — create (no `task` prop) via POST /tasks or edit
 // via PATCH /tasks/:id. Mode toggle "once / recurring": once → optional,
 // clearable due date; recurring → interval as number + unit (hours/days),
-// stored as hours (days × 24), 1–8760. Same a11y patterns as HabitForm
-// (focus trap entry/restore, Escape, aria-modal, explicit Cancel).
+// stored as hours (days × 24), 1–8760. A11y scaffold (focus trap, Escape,
+// aria-modal) comes from the shared Sheet.
 
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
+import Sheet from './Sheet';
 import { useCreateTask, useUpdateTask } from '../hooks/useTasks';
 import type { TaskInput, TaskItem, TaskPatch } from '../types';
 
@@ -40,28 +41,6 @@ export default function TaskForm({ task, onClose }: TaskFormProps) {
     intervalUnit === 'days' ? intervalValue * 24 : intervalValue;
   const intervalValid =
     Number.isInteger(intervalValue) && intervalHours >= 1 && intervalHours <= MAX_INTERVAL_HOURS;
-
-  // Focus management: trap entry on mount (unless autoFocus already put focus
-  // inside the sheet), restore the previously focused element on unmount.
-  const sheetRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const previouslyFocused = document.activeElement;
-    if (!sheetRef.current?.contains(document.activeElement)) {
-      sheetRef.current?.focus();
-    }
-    return () => {
-      if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus();
-    };
-  }, []);
-
-  // Escape closes the sheet.
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
-    }
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
 
   const saving = createTask.isPending || updateTask.isPending;
   const error = createTask.error ?? updateTask.error;
@@ -100,126 +79,120 @@ export default function TaskForm({ task, onClose }: TaskFormProps) {
   }
 
   return (
-    <div className="sheet-scrim" onClick={onClose}>
-      <div
-        ref={sheetRef}
-        tabIndex={-1}
-        className="sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-label={task ? 'Edit task' : 'New task'}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="sheet-title">{task ? 'Edit task' : '✅ New task'}</h2>
-        <form onSubmit={handleSubmit}>
-          <label className="field">
-            <span className="field-label">Name</span>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Water the plants"
-              autoFocus
-              required
-            />
-          </label>
+    <Sheet label={task ? 'Edit task' : 'New task'} onClose={onClose}>
+      <h2 className="sheet-title">{task ? 'Edit task' : '✅ New task'}</h2>
+      <form onSubmit={handleSubmit}>
+        <label className="field">
+          <span className="field-label">Name</span>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Water the plants"
+            autoFocus
+            required
+          />
+        </label>
 
-          <div className="field">
-            <span className="field-label">Type</span>
-            <div className="freq-toggle" role="radiogroup" aria-label="Task type">
-              <button
-                type="button"
-                className={'freq-option' + (mode === 'once' ? ' freq-active' : '')}
-                onClick={() => setMode('once')}
-              >
-                Once
-              </button>
-              <button
-                type="button"
-                className={'freq-option' + (mode === 'recurring' ? ' freq-active' : '')}
-                onClick={() => setMode('recurring')}
-              >
-                Recurring
-              </button>
-            </div>
+        <div className="field">
+          <span className="field-label">Type</span>
+          <div className="freq-toggle" role="radiogroup" aria-label="Task type">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={mode === 'once'}
+              className={'freq-option' + (mode === 'once' ? ' freq-active' : '')}
+              onClick={() => setMode('once')}
+            >
+              Once
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={mode === 'recurring'}
+              className={'freq-option' + (mode === 'recurring' ? ' freq-active' : '')}
+              onClick={() => setMode('recurring')}
+            >
+              Recurring
+            </button>
           </div>
+        </div>
 
-          {mode === 'once' ? (
-            <div className="field">
-              <span className="field-label">Due date (optional)</span>
-              <div className="due-date-row">
-                <input
-                  type="date"
-                  className="due-date-input"
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                  aria-label="Due date"
-                />
-                {dueDate !== '' && (
-                  <button
-                    type="button"
-                    className="due-date-clear"
-                    onClick={() => setDueDate('')}
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="field">
-              <span className="field-label">Repeat every</span>
-              <div className="interval-row">
-                <input
-                  type="number"
-                  className="interval-value"
-                  min={1}
-                  max={intervalUnit === 'days' ? MAX_INTERVAL_HOURS / 24 : MAX_INTERVAL_HOURS}
-                  step={1}
-                  value={Number.isNaN(intervalValue) ? '' : intervalValue}
-                  onChange={(e) => setIntervalValue(e.target.valueAsNumber)}
-                  aria-label="Interval"
-                  required
-                />
-                <select
-                  className="interval-unit"
-                  value={intervalUnit}
-                  onChange={(e) => setIntervalUnit(e.target.value as IntervalUnit)}
-                  aria-label="Interval unit"
+        {mode === 'once' ? (
+          <div className="field">
+            <span className="field-label">Due date (optional)</span>
+            <div className="due-date-row">
+              <input
+                type="date"
+                className="due-date-input"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                aria-label="Due date"
+              />
+              {dueDate !== '' && (
+                <button
+                  type="button"
+                  className="due-date-clear"
+                  onClick={() => setDueDate('')}
                 >
-                  <option value="hours">hours</option>
-                  <option value="days">days</option>
-                </select>
-              </div>
-              {!intervalValid && !Number.isNaN(intervalValue) && (
-                <p className="form-error interval-error">
-                  Interval must be a whole number between 1 hour and 1 year.
-                </p>
+                  Clear
+                </button>
               )}
             </div>
-          )}
-
-          <label className="field">
-            <span className="field-label">Notes (optional)</span>
-            <textarea
-              className="notes-input"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-            />
-          </label>
-
-          {error && <p className="form-error">{error.message}</p>}
-
-          <div className="sheet-actions">
-            <button type="button" className="btn-secondary" onClick={onClose}>
-              Cancel
-            </button>
-            <button type="submit" className="btn-primary" disabled={!submittable}>
-              {saving ? 'Saving…' : task ? 'Save changes' : 'Create task'}
-            </button>
           </div>
-        </form>
-      </div>
-    </div>
+        ) : (
+          <div className="field">
+            <span className="field-label">Repeat every</span>
+            <div className="interval-row">
+              <input
+                type="number"
+                className="interval-value"
+                min={1}
+                max={intervalUnit === 'days' ? MAX_INTERVAL_HOURS / 24 : MAX_INTERVAL_HOURS}
+                step={1}
+                value={Number.isNaN(intervalValue) ? '' : intervalValue}
+                onChange={(e) => setIntervalValue(e.target.valueAsNumber)}
+                aria-label="Interval"
+                required
+              />
+              <select
+                className="interval-unit"
+                value={intervalUnit}
+                onChange={(e) => setIntervalUnit(e.target.value as IntervalUnit)}
+                aria-label="Interval unit"
+              >
+                <option value="hours">hours</option>
+                <option value="days">days</option>
+              </select>
+            </div>
+            {!intervalValid && !Number.isNaN(intervalValue) && (
+              <p className="form-error interval-error">
+                Interval must be a whole number between 1 hour and 1 year.
+              </p>
+            )}
+          </div>
+        )}
+
+        <label className="field">
+          <span className="field-label">Notes (optional)</span>
+          <textarea
+            className="notes-input"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+          />
+        </label>
+
+        {error && <p className="form-error">{error.message}</p>}
+
+        <div className="sheet-actions">
+          <button type="button" className="btn-secondary" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="btn-primary" disabled={!submittable}>
+            {saving ? 'Saving…' : task ? 'Save changes' : 'Create task'}
+          </button>
+        </div>
+      </form>
+    </Sheet>
   );
 }

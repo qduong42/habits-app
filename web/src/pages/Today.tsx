@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError } from '../api';
+import ActionSheet from '../components/ActionSheet';
 import CaptureSheet from '../components/CaptureSheet';
 import Celebration, { type CelebrationData } from '../components/Celebration';
 import HabitForm from '../components/HabitForm';
@@ -313,74 +314,40 @@ export default function Today() {
       )}
 
       {menuHabit && (
-        <div className="sheet-scrim" onClick={() => setMenuHabit(null)}>
-          <div
-            className="sheet action-sheet"
-            role="dialog"
-            aria-label={`Options for ${menuHabit.name}`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="sheet-title">{menuHabit.name}</h2>
-            <button
-              type="button"
-              className="action-btn"
-              onClick={() => {
+        <ActionSheet
+          title={menuHabit.name}
+          onClose={() => setMenuHabit(null)}
+          actions={[
+            {
+              label: '✏️ Edit',
+              onClick: () => {
                 setEditHabit(menuHabit);
                 setMenuHabit(null);
                 setFormOpen(true);
-              }}
-            >
-              ✏️ Edit
-            </button>
-            <button type="button" className="action-btn" onClick={() => handleArchive(menuHabit)}>
-              📦 Archive
-            </button>
-            <button
-              type="button"
-              className="action-btn action-btn-danger"
-              onClick={() => handleDelete(menuHabit)}
-            >
-              🗑 Delete
-            </button>
-            <button type="button" className="action-btn" onClick={() => setMenuHabit(null)}>
-              Cancel
-            </button>
-          </div>
-        </div>
+              },
+            },
+            { label: '📦 Archive', onClick: () => handleArchive(menuHabit) },
+            { label: '🗑 Delete', onClick: () => handleDelete(menuHabit), danger: true },
+          ]}
+        />
       )}
 
       {menuTask && (
-        <div className="sheet-scrim" onClick={() => setMenuTask(null)}>
-          <div
-            className="sheet action-sheet"
-            role="dialog"
-            aria-label={`Options for ${menuTask.name}`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="sheet-title">{menuTask.name}</h2>
-            <button
-              type="button"
-              className="action-btn"
-              onClick={() => {
+        <ActionSheet
+          title={menuTask.name}
+          onClose={() => setMenuTask(null)}
+          actions={[
+            {
+              label: '✏️ Edit',
+              onClick: () => {
                 setEditTask(menuTask);
                 setMenuTask(null);
                 setTaskFormOpen(true);
-              }}
-            >
-              ✏️ Edit
-            </button>
-            <button
-              type="button"
-              className="action-btn action-btn-danger"
-              onClick={() => handleTaskDelete(menuTask)}
-            >
-              🗑 Delete
-            </button>
-            <button type="button" className="action-btn" onClick={() => setMenuTask(null)}>
-              Cancel
-            </button>
-          </div>
-        </div>
+              },
+            },
+            { label: '🗑 Delete', onClick: () => handleTaskDelete(menuTask), danger: true },
+          ]}
+        />
       )}
     </div>
   );

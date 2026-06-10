@@ -1,12 +1,12 @@
 // React Query hooks for the 📌 Tasks section. The ['tasks'] query fetches
 // /tasks?all=1 so the collapsed "⏳ Scheduled" list is reachable from one
-// cache entry; the complete/undo mutation mirrors useCheckin — optimistic
-// group flip with rollback, GameContext XP feed, and last-in-flight
-// invalidation to avoid double-tap flicker.
+// cache entry; the complete/undo mutation shares the optimistic-toggle
+// plumbing with useCheckin (useOptimisticToggle) — only the cache flip
+// differs.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ApiError, apiFetch } from '../api';
-import { useGame } from './useGame';
+import { apiFetch } from '../api';
+import { useOptimisticToggle } from './useOptimisticToggle';
 import type {
   TaskCompleteResponse,
   TaskGroup,
@@ -30,10 +30,6 @@ export interface TaskToggleVars {
   done: boolean;
 }
 
-interface TaskToggleContext {
-  previous: TasksResponse | undefined;
-}
-
 /** Discriminate with `'xpGained' in result` (complete) vs undo. */
 export type TaskCompleteResult = TaskCompleteResponse | UndoResponse;
 
@@ -55,51 +51,21 @@ function guessOpenGroup(task: TaskItem): TaskGroup {
 }
 
 export function useCompleteTask() {
-  const queryClient = useQueryClient();
-  const { applyXp } = useGame();
-  return useMutation<TaskCompleteResult, Error, TaskToggleVars, TaskToggleContext>({
-    // Shared key so concurrent toggles can be counted in onSettled.
-    mutationKey: ['task-complete'],
+  return useOptimisticToggle<TasksResponse, TaskToggleVars, TaskCompleteResult>({
+    mutationKey: 'task-complete',
+    queryKey: ['tasks'],
     mutationFn: ({ task, done }) =>
       done
         ? apiFetch<TaskCompleteResponse>(`/tasks/${task.id}/complete`, { method: 'POST' })
         : apiFetch<UndoResponse>(`/tasks/${task.id}/complete`, { method: 'DELETE' }),
-    onMutate: async ({ task, done }) => {
-      await queryClient.cancelQueries({ queryKey: ['tasks'] });
-      const previous = queryClient.getQueryData<TasksResponse>(['tasks']);
+    optimisticUpdate: (old, { task, done }) => {
       const group: TaskGroup = done ? 'done' : guessOpenGroup(task);
-      queryClient.setQueryData<TasksResponse>(['tasks'], (old) =>
-        old === undefined
-          ? undefined
-          : {
-              ...old,
-              tasks: old.tasks.map((t) =>
-                t.id === task.id ? { ...t, group, dueLabel: done ? null : t.dueLabel } : t,
-              ),
-            },
-      );
-      return { previous };
-    },
-    // Both response shapes carry server-truth {xpTotal, level} → XpBar.
-    onSuccess: (res) => {
-      applyXp(res);
-      if ('xpGained' in res && res.unlockedAchievements.length > 0) {
-        void queryClient.invalidateQueries({ queryKey: ['achievements'] });
-      }
-    },
-    onError: (err, _vars, context) => {
-      // 409 already_done: the one-off IS done — keep the optimistic state and
-      // let onSettled's invalidation reconcile. Everything else rolls back.
-      if (err instanceof ApiError && err.code === 'already_done') return;
-      if (context?.previous !== undefined) {
-        queryClient.setQueryData(['tasks'], context.previous);
-      }
-    },
-    onSettled: () => {
-      // Only the LAST in-flight toggle invalidates (see useCheckin).
-      if (queryClient.isMutating({ mutationKey: ['task-complete'] }) === 1) {
-        queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      }
+      return {
+        ...old,
+        tasks: old.tasks.map((t) =>
+          t.id === task.id ? { ...t, group, dueLabel: done ? null : t.dueLabel } : t,
+        ),
+      };
     },
   });
 }
