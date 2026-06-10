@@ -676,6 +676,8 @@ body {
 
 .due-date-input {
   flex: 1;
+  /* Two inputs share the reminder row (date + time) — let them shrink. */
+  min-width: 0;
 }
 
 .interval-value {

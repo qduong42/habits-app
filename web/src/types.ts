@@ -109,6 +109,10 @@ export interface TaskItem {
   dueDate: string | null;
   intervalHours: number | null;
   nextDue: string | null;
+  /** Reminder timestamp (v1.2) — one-off tasks only; null = no reminder. */
+  remindAt: string | null;
+  /** Set when the reminder push fired; null while pending. */
+  remindedAt: string | null;
 }
 
 /** GET /tasks(?all=1) → ordered overdue, today, undated, done(, scheduled). */
@@ -141,6 +145,12 @@ export interface TaskPatch {
   notes?: string | null;
   dueDate?: string | null;
   intervalHours?: number | null;
+  /**
+   * ISO timestamp | null (clears). One-off only — 400 on recurring. Sending
+   * the field at all clears remindedAt server-side (re-arms the reminder), so
+   * omit it when unchanged.
+   */
+  remindAt?: string | null;
 }
 
 /** GET /stats — per-habit aggregates (active habits only). */

@@ -1,8 +1,9 @@
 // Bottom-sheet task form — create (no `task` prop) via POST /tasks or edit
 // via PATCH /tasks/:id. Mode toggle "once / recurring": once → optional,
 // clearable due date; recurring → interval as number + unit (hours/days),
-// stored as hours (days × 24), 1–8760. A11y scaffold (focus trap, Escape,
-// aria-modal) comes from the shared Sheet.
+// stored as hours (days × 24), 1–8760. Edit mode on one-off tasks also offers
+// a "Remind me" date + time (v1.2 reminders). A11y scaffold (focus trap,
+// Escape, aria-modal) comes from the shared Sheet.
 
 import { useState, type FormEvent } from 'react';
 import Sheet from './Sheet';
@@ -10,6 +11,18 @@ import { useCreateTask, useUpdateTask } from '../hooks/useTasks';
 import type { TaskInput, TaskItem, TaskPatch } from '../types';
 
 const MAX_INTERVAL_HOURS = 8760; // one year — server-enforced ceiling
+
+const DEFAULT_REMIND_TIME = '09:00'; // user-local, per the v1.2 design grill
+
+/** ISO timestamp → user-local {date: 'YYYY-MM-DD', time: 'HH:MM'} input values. */
+function splitLocalDateTime(iso: string): { date: string; time: string } {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return {
+    date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+    time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+  };
+}
 
 type Mode = 'once' | 'recurring';
 type IntervalUnit = 'hours' | 'days';
@@ -28,6 +41,13 @@ export default function TaskForm({ task, onClose }: TaskFormProps) {
   const [mode, setMode] = useState<Mode>(task?.kind === 'recurring' ? 'recurring' : 'once');
   const [dueDate, setDueDate] = useState(task?.dueDate ?? '');
   const [notes, setNotes] = useState(task?.notes ?? '');
+
+  // Reminder prefill (edit mode only — the field isn't rendered when creating).
+  const initialRemind = task?.remindAt
+    ? splitLocalDateTime(task.remindAt)
+    : { date: '', time: '' };
+  const [remindDate, setRemindDate] = useState(initialRemind.date);
+  const [remindTime, setRemindTime] = useState(initialRemind.time);
 
   // Interval prefill: whole-day intervals show as days (120h → 5 days).
   const initialInterval = task?.intervalHours ?? 24;
@@ -56,13 +76,28 @@ export default function TaskForm({ task, onClose }: TaskFormProps) {
       if (task) {
         // PATCH clears the other mode's field explicitly (dueDate XOR
         // intervalHours server-side); re-sending an unchanged intervalHours
-        // keeps the task's nextDue anchor.
+        // keeps the task's nextDue anchor. remindAt is only sent when the
+        // inputs were touched — including it always would clear remindedAt
+        // and re-arm an already-fired reminder. Switching to recurring must
+        // clear it (the server 400s on recurring + remindAt).
+        const remindDirty =
+          remindDate !== initialRemind.date || remindTime !== initialRemind.time;
+        const remindAt =
+          remindDate === ''
+            ? null
+            : new Date(
+                `${remindDate}T${remindTime === '' ? DEFAULT_REMIND_TIME : remindTime}`,
+              ).toISOString();
         const patch: TaskPatch = {
           name: trimmedName,
           notes: trimmedNotes === '' ? null : trimmedNotes,
           ...(mode === 'recurring'
-            ? { intervalHours, dueDate: null }
-            : { dueDate: dueDate === '' ? null : dueDate, intervalHours: null }),
+            ? { intervalHours, dueDate: null, remindAt: null }
+            : {
+                dueDate: dueDate === '' ? null : dueDate,
+                intervalHours: null,
+                ...(remindDirty ? { remindAt } : {}),
+              }),
         };
         await updateTask.mutateAsync({ id: task.id, patch });
       } else {
@@ -118,27 +153,67 @@ export default function TaskForm({ task, onClose }: TaskFormProps) {
         </div>
 
         {mode === 'once' ? (
-          <div className="field">
-            <span className="field-label">Due date (optional)</span>
-            <div className="due-date-row">
-              <input
-                type="date"
-                className="due-date-input"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                aria-label="Due date"
-              />
-              {dueDate !== '' && (
-                <button
-                  type="button"
-                  className="due-date-clear"
-                  onClick={() => setDueDate('')}
-                >
-                  Clear
-                </button>
-              )}
+          <>
+            <div className="field">
+              <span className="field-label">Due date (optional)</span>
+              <div className="due-date-row">
+                <input
+                  type="date"
+                  className="due-date-input"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  aria-label="Due date"
+                />
+                {dueDate !== '' && (
+                  <button
+                    type="button"
+                    className="due-date-clear"
+                    onClick={() => setDueDate('')}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+            {task && (
+              <div className="field">
+                <span className="field-label">Remind me (optional)</span>
+                <div className="due-date-row">
+                  <input
+                    type="date"
+                    className="due-date-input"
+                    value={remindDate}
+                    onChange={(e) => {
+                      setRemindDate(e.target.value);
+                      if (e.target.value !== '' && remindTime === '') {
+                        setRemindTime(DEFAULT_REMIND_TIME);
+                      }
+                    }}
+                    aria-label="Reminder date"
+                  />
+                  <input
+                    type="time"
+                    className="due-date-input"
+                    value={remindTime}
+                    onChange={(e) => setRemindTime(e.target.value)}
+                    aria-label="Reminder time"
+                  />
+                  {remindDate !== '' && (
+                    <button
+                      type="button"
+                      className="due-date-clear"
+                      onClick={() => {
+                        setRemindDate('');
+                        setRemindTime('');
+                      }}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
         ) : (
           <div className="field">
             <span className="field-label">Repeat every</span>
