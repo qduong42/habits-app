@@ -650,8 +650,8 @@ Definitions: recurring `overdue` = `nextDue <= now` for one-offs `dueDate < toda
 
 **Files:** Create: `server/Dockerfile`, `README.md`; Modify: `docker-compose.yml` (api service: build server, run migrations then start, serve web/dist; depends_on postgres)
 
-- [ ] **Step 1: Implement** — multi-stage Dockerfile (build web + server, copy `web/dist`); compose `api` service with env vars, `npm run db:migrate && node dist/index.js` entry. README: what it is, dev setup, seed users, deploy notes (HTTPS required for PWA/push), screenshot placeholder strictly excluded — describe instead.
-- [ ] **Step 2: `docker compose up --build` smoke test (healthz + login via curl), commit** — `chore: production docker compose and README`
+- [x] **Step 1: Implement** — multi-stage Dockerfile (build web + server, copy `web/dist`); compose `api` service with env vars, `npm run db:migrate && node dist/index.js` entry. README: what it is, dev setup, seed users, deploy notes (HTTPS required for PWA/push), screenshot placeholder strictly excluded — describe instead.
+- [x] **Step 2: `docker compose up --build` smoke test (healthz + login via curl), commit** — `chore: production docker compose and README`
 
 ---
 

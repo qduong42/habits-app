@@ -12,5 +12,23 @@ services:
       interval: 2s
       timeout: 3s
       retries: 15
+  api:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      DATABASE_URL: postgres://habits:habits@postgres:5432/habits
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      SEED_PASSWORD: ${SEED_PASSWORD:-changeme123}
+      # Optional — without keys the server boots and push answers 503.
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+    ports: ["3002:3001"]
+    depends_on:
+      postgres:
+        condition: service_healthy
 volumes:
   postgres_data:

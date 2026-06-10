@@ -1,0 +1,9 @@
+# Keep the build context small; builds happen inside the image.
+.git
+node_modules
+**/node_modules
+**/dist
+docs
+*.md
+**/*.md
+.env*
