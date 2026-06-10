@@ -2,7 +2,7 @@
 // (full catalog; locked badges grayed with 🔒 and their description still
 // visible so they read as goals), and logout.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { ApiError, apiFetch } from '../api';
@@ -37,6 +37,74 @@ const OTHER_ZONES = ALL_ZONES.filter((z) => !COMMON_ZONES.includes(z));
 interface SettingsBody {
   nudgeTime?: string | null;
   timezone?: string;
+}
+
+function ChangePasswordSection() {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [changed, setChanged] = useState(false);
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    setChanged(false);
+    try {
+      await apiFetch('/me/password', {
+        method: 'POST',
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      setCurrentPassword('');
+      setNewPassword('');
+      setChanged(true);
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'wrong_password') {
+        setError('Current password is wrong');
+      } else {
+        setError(err instanceof Error ? err.message : 'Could not change the password');
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <h2 className="section-title">Change password</h2>
+      <div className="settings-card">
+        <form onSubmit={onSubmit}>
+          <label className="field">
+            <span className="field-label">Current password</span>
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              autoComplete="current-password"
+              required
+            />
+          </label>
+          <label className="field">
+            <span className="field-label">New password (min 8 characters)</span>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              autoComplete="new-password"
+              minLength={8}
+              required
+            />
+          </label>
+          {error && <p className="form-error">{error}</p>}
+          {changed && <p className="settings-hint">Password changed</p>}
+          <button type="submit" className="btn-secondary" disabled={busy}>
+            {busy ? 'Saving…' : 'Save'}
+          </button>
+        </form>
+      </div>
+    </>
+  );
 }
 
 export default function Profile() {
@@ -255,6 +323,8 @@ export default function Profile() {
           <p className="form-error">Could not save settings: {settings.error.message}</p>
         )}
       </div>
+
+      <ChangePasswordSection />
 
       <h2 className="section-title">
         Achievements

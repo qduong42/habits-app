@@ -33,9 +33,11 @@ export async function apiFetch<T = unknown>(path: string, opts: RequestInit = {}
     } catch {
       // Non-JSON error body — keep the fallback code/message.
     }
-    if (res.status === 401) {
+    if (res.status === 401 && code === 'unauthenticated') {
       // Session expired or missing: send the user to the login screen.
       // Hash routing means this works without any server-side route config.
+      // Other 401 codes (invalid_credentials, wrong_password) are form-level
+      // errors on an authenticated/login page — those render inline instead.
       location.hash = '#/login';
     }
     throw new ApiError(code, message, res.status);
