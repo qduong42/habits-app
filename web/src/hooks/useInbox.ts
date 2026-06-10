@@ -67,11 +67,15 @@ export function useConvertTask() {
   });
 }
 
+/** Discard with an optional answer note — empty/absent note stores null. */
 export function useDiscard() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (itemId: string) =>
-      apiFetch<InboxItem>(`/inbox/${itemId}/discard`, { method: 'POST' }),
+    mutationFn: ({ itemId, note }: { itemId: string; note?: string }) =>
+      apiFetch<InboxItem>(`/inbox/${itemId}/discard`, {
+        method: 'POST',
+        body: JSON.stringify(note !== undefined ? { note } : {}),
+      }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['inbox'] }),
   });
 }

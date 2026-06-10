@@ -128,6 +128,9 @@ export const inboxItems = pgTable('inbox_items', {
   // history survives.
   habitId: uuid('habit_id').references(() => habits.id, { onDelete: 'set null' }), // set when triaged into a habit
   taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'set null' }), // set when triaged into a task (Task 27 route)
+  // Optional answer captured at discard time ("sasi teeth is ok?" → "yes,
+  // dentist said fine"). Discards only — conversions never set it (v1.1).
+  discardNote: text('discard_note'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

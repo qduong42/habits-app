@@ -35,6 +35,13 @@ const convertSchema = z
     }
   });
 
+// Optional body — supertest/fetch may send no body at all (req.body
+// undefined), `{}`, or `{note}`. Empty/whitespace notes normalize to null
+// ("Enter with empty input = discard without note").
+const discardSchema = z
+  .object({ note: z.string().trim().max(2000).optional() })
+  .optional();
+
 const itemId = (raw: string) => uuidParam(raw, 'Inbox item not found');
 
 export const inboxRouter = Router();
@@ -64,5 +71,7 @@ inboxRouter.post('/:id/convert-task', async (req, res) => {
 });
 
 inboxRouter.post('/:id/discard', async (req, res) => {
-  res.json(await discardItem(userIdOf(req), itemId(req.params.id)));
+  const body = parseBody(discardSchema, req.body);
+  const note = body?.note || null; // zod trimmed; '' (empty/whitespace) → null
+  res.json(await discardItem(userIdOf(req), itemId(req.params.id), note));
 });

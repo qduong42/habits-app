@@ -1,0 +1,1 @@
+ALTER TABLE "inbox_items" ADD COLUMN "discard_note" text;

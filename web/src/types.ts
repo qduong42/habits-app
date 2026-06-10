@@ -174,6 +174,8 @@ export interface InboxItem {
   status: 'open' | 'converted' | 'discarded';
   habitId: string | null;
   taskId: string | null;
+  /** Optional answer captured at discard time; discards only. */
+  discardNote: string | null;
   createdAt: string;
 }
 

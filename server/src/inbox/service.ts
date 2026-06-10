@@ -20,6 +20,7 @@ export interface InboxItemContract {
   status: 'open' | 'converted' | 'discarded';
   habitId: string | null;
   taskId: string | null;
+  discardNote: string | null;
   createdAt: string;
 }
 
@@ -58,6 +59,7 @@ function toContract(item: InboxItem): InboxItemContract {
     status: item.status,
     habitId: item.habitId,
     taskId: item.taskId, // set by convert-task (Task 27); null until then
+    discardNote: item.discardNote, // discards only; null on open/converted items
     createdAt: item.createdAt.toISOString(),
   };
 }
@@ -190,11 +192,19 @@ export async function convertItemToTask(
   return { item, task: target, unlockedAchievements };
 }
 
-/** Discard is allowed only from 'open' — the conditional update makes it atomic. */
-export async function discardItem(userId: string, itemId: string): Promise<InboxItemContract> {
+/**
+ * Discard is allowed only from 'open' — the conditional update makes it
+ * atomic. `note` (already trimmed/normalized to null by the route) is the
+ * optional answer captured at discard time; only this path ever sets it.
+ */
+export async function discardItem(
+  userId: string,
+  itemId: string,
+  note: string | null,
+): Promise<InboxItemContract> {
   const [updated] = await db
     .update(inboxItems)
-    .set({ status: 'discarded' })
+    .set({ status: 'discarded', discardNote: note })
     .where(
       and(
         eq(inboxItems.id, itemId),

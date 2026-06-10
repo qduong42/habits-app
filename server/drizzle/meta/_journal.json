@@ -50,6 +50,13 @@
       "when": 1781092622394,
       "tag": "0006_dapper_meteorite",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1781101113542,
+      "tag": "0007_nice_harrier",
+      "breakpoints": true
     }
   ]
 }

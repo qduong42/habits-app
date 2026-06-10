@@ -3,7 +3,7 @@
 // a "Triage N items →" button opening the card-by-card flow (TriageCard),
 // and the open items below with the → Habit / Discard per-item shortcuts.
 
-import { useCallback, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import Celebration, { type CelebrationData } from '../components/Celebration';
 import HabitForm from '../components/HabitForm';
 import TriageCard from '../components/TriageCard';
@@ -22,6 +22,10 @@ export default function Inbox() {
   const [convertItem, setConvertItem] = useState<InboxItem | null>(null);
   const [celebration, setCelebration] = useState<CelebrationData | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // The inline discard-note input IS the confirm (no window.confirm): Enter
+  // (even empty) discards, Escape cancels. One item at a time.
+  const [discardingId, setDiscardingId] = useState<string | null>(null);
+  const [discardNote, setDiscardNote] = useState('');
   // Snapshot of the open items when triage starts — fixes the "2 / 5"
   // progress denominator while actions remove items from the live query.
   const [triageQueue, setTriageQueue] = useState<InboxItem[] | null>(null);
@@ -66,10 +70,31 @@ export default function Inbox() {
     celebrate(res.unlockedAchievements);
   }
 
-  function handleDiscard(item: InboxItem) {
-    if (!window.confirm('Let this thought go?')) return;
+  function cancelDiscard() {
+    setDiscardingId(null);
+    setDiscardNote('');
+  }
+
+  /** Enter in the note input — empty note discards without one. */
+  function confirmDiscard(item: InboxItem) {
+    if (discard.isPending) return;
+    const note = discardNote.trim();
     setActionError(null);
-    discard.mutate(item.id, { onError: (err) => setActionError(err.message) });
+    discard.mutate(
+      { itemId: item.id, ...(note !== '' ? { note } : {}) },
+      { onError: (err) => setActionError(err.message) },
+    );
+    cancelDiscard();
+  }
+
+  function handleDiscardKeyDown(e: KeyboardEvent<HTMLInputElement>, item: InboxItem) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      confirmDiscard(item);
+    } else if (e.key === 'Escape') {
+      e.stopPropagation(); // cancel the input only — nothing above should react
+      cancelDiscard();
+    }
   }
 
   return (
@@ -140,34 +165,50 @@ export default function Inbox() {
                   <p className="dump-text">{item.text}</p>
                   <span className="dump-age">{formatAge(item.createdAt)}</span>
                 </div>
-                <div className="dump-item-actions">
-                  {item.sourceUrl && (
-                    <a
-                      className="dump-link"
-                      href={item.sourceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label="Open source link"
+                {discardingId === item.id ? (
+                  <input
+                    className="capture-url"
+                    value={discardNote}
+                    onChange={(e) => setDiscardNote(e.target.value)}
+                    onKeyDown={(e) => handleDiscardKeyDown(e, item)}
+                    placeholder="Optional note — Enter to discard, Esc to cancel"
+                    aria-label="Optional discard note"
+                    maxLength={2000}
+                    autoFocus
+                  />
+                ) : (
+                  <div className="dump-item-actions">
+                    {item.sourceUrl && (
+                      <a
+                        className="dump-link"
+                        href={item.sourceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="Open source link"
+                      >
+                        🔗
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      className="dump-btn dump-btn-habit"
+                      onClick={() => setConvertItem(item)}
                     >
-                      🔗
-                    </a>
-                  )}
-                  <button
-                    type="button"
-                    className="dump-btn dump-btn-habit"
-                    onClick={() => setConvertItem(item)}
-                  >
-                    → Habit
-                  </button>
-                  <button
-                    type="button"
-                    className="dump-btn dump-btn-discard"
-                    onClick={() => handleDiscard(item)}
-                    disabled={discard.isPending}
-                  >
-                    Discard
-                  </button>
-                </div>
+                      → Habit
+                    </button>
+                    <button
+                      type="button"
+                      className="dump-btn dump-btn-discard"
+                      onClick={() => {
+                        setDiscardingId(item.id);
+                        setDiscardNote('');
+                      }}
+                      disabled={discard.isPending}
+                    >
+                      Discard
+                    </button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

@@ -68,8 +68,9 @@ function convertTask(cookie: string, itemId: string, body: Record<string, unknow
   return request(app).post(`/api/inbox/${itemId}/convert-task`).set('Cookie', cookie).send(body);
 }
 
-function discard(cookie: string, itemId: string) {
-  return request(app).post(`/api/inbox/${itemId}/discard`).set('Cookie', cookie);
+function discard(cookie: string, itemId: string, body?: Record<string, unknown>) {
+  const req = request(app).post(`/api/inbox/${itemId}/discard`).set('Cookie', cookie);
+  return body === undefined ? req : req.send(body);
 }
 
 async function cleanup() {
@@ -124,6 +125,7 @@ describe('POST /api/inbox (capture)', () => {
       status: 'open',
       habitId: null,
       taskId: null,
+      discardNote: null,
       createdAt: expect.any(String),
     });
   });
@@ -217,6 +219,7 @@ describe('POST /api/inbox/:id/convert', () => {
       status: 'converted',
       habitId: res.body.habit.id,
       taskId: null,
+      discardNote: null,
       createdAt: expect.any(String),
     });
     expect(res.body.unlockedAchievements).toEqual([
@@ -385,6 +388,7 @@ describe('POST /api/inbox/:id/convert-task (Task 27)', () => {
       status: 'converted',
       habitId: null, // exactly one of habitId/taskId when converted
       taskId: res.body.task.id,
+      discardNote: null,
       createdAt: expect.any(String),
     });
     // first-conversion unlocks through the convert-task path too
@@ -626,5 +630,85 @@ describe('POST /api/inbox/:id/discard', () => {
     const foreignId = await capture(other.cookie, { text: 'not yours' });
     expect((await discard(u.cookie, foreignId)).status).toBe(404);
     expect((await discard(u.cookie, 'nope')).status).toBe(404);
+  });
+
+  it('stores an optional answer note (trimmed) and serializes it everywhere', async () => {
+    const u = await makeUser();
+    const itemId = await capture(u.cookie, { text: 'sasi teeth is ok?' });
+
+    const res = await discard(u.cookie, itemId, { note: '  answered: yes  ' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      id: itemId,
+      status: 'discarded',
+      discardNote: 'answered: yes', // trimmed
+    });
+
+    // the note survives into the ?all=1 listing (History data source)
+    const all = await request(app).get('/api/inbox?all=1').set('Cookie', u.cookie);
+    expect(all.status).toBe(200);
+    expect(all.body).toEqual([
+      expect.objectContaining({ id: itemId, status: 'discarded', discardNote: 'answered: yes' }),
+    ]);
+  });
+
+  it('empty/whitespace note or no body → discardNote null', async () => {
+    const u = await makeUser();
+
+    const noBody = await discard(u.cookie, await capture(u.cookie, { text: 'no body' }));
+    expect(noBody.status).toBe(200);
+    expect(noBody.body).toMatchObject({ status: 'discarded', discardNote: null });
+
+    const emptyBody = await discard(u.cookie, await capture(u.cookie, { text: 'empty body' }), {});
+    expect(emptyBody.status).toBe(200);
+    expect(emptyBody.body).toMatchObject({ status: 'discarded', discardNote: null });
+
+    const emptyNote = await discard(u.cookie, await capture(u.cookie, { text: 'empty note' }), {
+      note: '',
+    });
+    expect(emptyNote.status).toBe(200);
+    expect(emptyNote.body).toMatchObject({ status: 'discarded', discardNote: null });
+
+    const whitespace = await discard(u.cookie, await capture(u.cookie, { text: 'whitespace' }), {
+      note: '   \n ',
+    });
+    expect(whitespace.status).toBe(200);
+    expect(whitespace.body).toMatchObject({ status: 'discarded', discardNote: null });
+  });
+
+  it('note longer than 2000 chars → 400 validation; the item stays open', async () => {
+    const u = await makeUser();
+    const itemId = await capture(u.cookie, { text: 'long note' });
+
+    const res = await discard(u.cookie, itemId, { note: 'x'.repeat(2001) });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('validation');
+
+    // the failed discard did not triage the item — a retry still works
+    const retry = await discard(u.cookie, itemId, { note: 'x'.repeat(2000) });
+    expect(retry.status).toBe(200);
+    expect(retry.body.discardNote).toBe('x'.repeat(2000));
+  });
+
+  it('a note in the convert bodies is ignored — discardNote stays null on conversions', async () => {
+    const u = await makeUser();
+
+    const habitItem = await capture(u.cookie, { text: 'habit with stray note' });
+    const habitRes = await convert(u.cookie, habitItem, {
+      name: 'Stray note habit',
+      categoryId: u.categoryId,
+      frequencyType: 'daily',
+      note: 'should be ignored',
+    });
+    expect(habitRes.status).toBe(200);
+    expect(habitRes.body.item).toMatchObject({ status: 'converted', discardNote: null });
+
+    const taskItem = await capture(u.cookie, { text: 'task with stray note' });
+    const taskRes = await convertTask(u.cookie, taskItem, {
+      name: 'Stray note task',
+      note: 'should be ignored',
+    });
+    expect(taskRes.status).toBe(200);
+    expect(taskRes.body.item).toMatchObject({ status: 'converted', discardNote: null });
   });
 });
