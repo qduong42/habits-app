@@ -663,4 +663,4 @@ Definitions: recurring `overdue` = `nextDue <= now` for one-offs `dueDate < toda
 
 ### Task 24: QA report
 
-- [ ] **Step 1:** Run full suite + build; exercise main flows with curl against a dev server (login → create habit → checkin → rewards → dump capture → triage to habit AND to recurring task → complete task incl. sub-daily double-complete → undo → stats). Write `docs/superpowers/ralph/QA-REPORT.md`: what works, response samples, any gaps for the morning review. Commit: `docs: overnight QA report`
+- [x] **Step 1:** Run full suite + build; exercise main flows with curl against a dev server (login → create habit → checkin → rewards → dump capture → triage to habit AND to recurring task → complete task incl. sub-daily double-complete → undo → stats). Write `docs/superpowers/ralph/QA-REPORT.md`: what works, response samples, any gaps for the morning review. Commit: `docs: overnight QA report`
