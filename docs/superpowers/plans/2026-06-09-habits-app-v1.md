@@ -537,9 +537,9 @@ test('awards thresholds crossed and skips already-unlocked', () => {
 - Create: `server/src/tasks/routes.ts`, `server/src/tasks/service.ts`, `server/src/game/dueness.ts`
 - Test: `server/test/dueness.test.ts`, `server/test/tasks.test.ts`
 
-- [ ] **Step 1: Schema** — per spec: `tasks` (`dueDate date` nullable, `intervalHours numeric` nullable — set = recurring, `nextDue timestamptz` nullable, `completedAt timestamptz` nullable) and `task_completions` (`taskId` cascade FK, `userId`, `localDate date`, `createdAt`; **no unique constraint** — sub-daily tasks complete multiple times per day). Add `taskId uuid` nullable FK on `inbox_items`. Generate + run migration.
+- [x] **Step 1: Schema** — per spec: `tasks` (`dueDate date` nullable, `intervalHours numeric` nullable — set = recurring, `nextDue timestamptz` nullable, `completedAt timestamptz` nullable) and `task_completions` (`taskId` cascade FK, `userId`, `localDate date`, `createdAt`; **no unique constraint** — sub-daily tasks complete multiple times per day). Add `taskId uuid` nullable FK on `inbox_items`. Generate + run migration.
 
-- [ ] **Step 2: Failing unit tests for dueness (pure fn)**
+- [x] **Step 2: Failing unit tests for dueness (pure fn)**
 
 ```ts
 import { taskGroup, dueLabel } from '../src/game/dueness.js';
@@ -565,11 +565,11 @@ test('dueLabel', () => {
 
 Definitions: recurring `overdue` = `nextDue <= now` for one-offs `dueDate < today`; recurring with `now - nextDue < 24h` whose nextDue is the current local day = `today` group, otherwise `overdue` with day/hour label; `done` = one-off completed on `today` OR recurring whose latest completion has `localDate === today` AND not yet due again; `hidden` = recurring not yet due (excluded from API response).
 
-- [ ] **Step 3: Failing integration tests** — create one-off (with/without dueDate) and recurring (`intervalHours: 120`); `GET /tasks` matches contract incl. ordering (overdue → today → undated → done) and excludes hidden recurring; `POST /tasks/:id/complete` one-off → `{xpGained: 5}`, user xp +5, task in `done` group; complete again → 409; recurring complete → `nextDue ≈ now + 120h`, completing a 12h task twice in one day works and earns 10 XP total; `DELETE /tasks/:id/complete` same-day undo restores prior state and xp; undo with no completion today → 404; foreign task → 404; `POST /tasks` validation: `dueDate` AND `intervalHours` together → 400, `intervalHours < 1` → 400; achievements come back through the same `checkAchievements` path (level-up by task XP works).
+- [x] **Step 3: Failing integration tests** — create one-off (with/without dueDate) and recurring (`intervalHours: 120`); `GET /tasks` matches contract incl. ordering (overdue → today → undated → done) and excludes hidden recurring; `POST /tasks/:id/complete` one-off → `{xpGained: 5}`, user xp +5, task in `done` group; complete again → 409; recurring complete → `nextDue ≈ now + 120h`, completing a 12h task twice in one day works and earns 10 XP total; `DELETE /tasks/:id/complete` same-day undo restores prior state and xp; undo with no completion today → 404; foreign task → 404; `POST /tasks` validation: `dueDate` AND `intervalHours` together → 400, `intervalHours < 1` → 400; achievements come back through the same `checkAchievements` path (level-up by task XP works).
 
-- [ ] **Step 4: Implement** — `dueness.ts` pure; `service.ts` complete/undo in one `db.transaction` mirroring the check-in transaction (reuse the achievement-context builder from `habits/service.ts` — extract a shared `game/rewards.ts` helper if that avoids duplication); wire `/api/tasks`.
+- [x] **Step 4: Implement** — `dueness.ts` pure; `service.ts` complete/undo in one `db.transaction` mirroring the check-in transaction (reuse the achievement-context builder from `habits/service.ts` — extract a shared `game/rewards.ts` helper if that avoids duplication); wire `/api/tasks`.
 
-- [ ] **Step 5: Green + commit** — `feat(server): one-off and recurring tasks with reset-on-completion`
+- [x] **Step 5: Green + commit** — `feat(server): one-off and recurring tasks with reset-on-completion`
 
 ### Task 26: Today 📌 Tasks section + task create/edit UI
 

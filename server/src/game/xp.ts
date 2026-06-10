@@ -21,3 +21,9 @@ export function levelProgress(xp: number): { into: number; needed: number } {
 export function checkinXp({ completesDay }: { completesDay: boolean }): number {
   return CHECKIN_BASE_XP + (completesDay ? COMPLETES_DAY_BONUS_XP : 0);
 }
+
+/**
+ * XP per task completion: flat 5, no day-bonus interaction — tasks never
+ * affect the +25 habit day bonus (spec: "Tasks & XP").
+ */
+export const TASK_COMPLETION_XP = 5;

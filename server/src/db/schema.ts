@@ -3,6 +3,7 @@ import {
   uuid,
   text,
   integer,
+  numeric,
   timestamp,
   jsonb,
   time,
@@ -68,6 +69,42 @@ export const checkins = pgTable(
 
 export type Checkin = typeof checkins.$inferSelect;
 
+/**
+ * Tasks have two shapes on one table (ADR-0001 — two time grains on purpose):
+ * - one-off: `intervalHours` NULL; optional `dueDate` (user-TZ local date);
+ *   `completedAt` is the terminal completion.
+ * - recurring: `intervalHours` set (>= 1); `nextDue` = last completion +
+ *   interval (creation time + interval initially); never terminal.
+ */
+export const tasks = pgTable('tasks', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id),
+  name: text('name').notNull(),
+  notes: text('notes'),
+  sourceUrl: text('source_url'),
+  dueDate: date('due_date'), // one-off only, optional
+  intervalHours: numeric('interval_hours', { mode: 'number' }), // set = recurring
+  nextDue: timestamp('next_due', { withTimezone: true }), // recurring only
+  completedAt: timestamp('completed_at', { withTimezone: true }), // one-off terminal
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type Task = typeof tasks.$inferSelect;
+
+// NO unique constraint on (task_id, local_date): sub-daily recurring tasks
+// legitimately complete multiple times per local date (ADR-0001).
+export const taskCompletions = pgTable('task_completions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  taskId: uuid('task_id')
+    .notNull()
+    .references(() => tasks.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id),
+  localDate: date('local_date').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type TaskCompletion = typeof taskCompletions.$inferSelect;
+
 // UI name: "Dump" — DB/API keep the `inbox` naming (spec).
 export const inboxItems = pgTable('inbox_items', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -78,7 +115,7 @@ export const inboxItems = pgTable('inbox_items', {
     .notNull()
     .default('open'),
   habitId: uuid('habit_id').references(() => habits.id), // set when triaged into a habit
-  // taskId FK comes in Task 25 together with the tasks table.
+  taskId: uuid('task_id').references(() => tasks.id), // set when triaged into a task (Task 27 route)
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

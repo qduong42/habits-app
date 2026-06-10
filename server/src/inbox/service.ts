@@ -1,24 +1,14 @@
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { db } from '../db/client.js';
-import {
-  achievements,
-  checkins,
-  habits,
-  inboxItems,
-  userAchievements,
-  users,
-} from '../db/schema.js';
+import { inboxItems } from '../db/schema.js';
 import type { InboxItem } from '../db/schema.js';
 import { localDateFor } from '../game/dates.js';
 import { levelFromXp } from '../game/xp.js';
-import { dayStreak } from '../game/streaks.js';
-import { checkAchievements } from '../game/achievements.js';
+import { awardAchievements, lockUserRow } from '../game/rewards.js';
+import type { UnlockedAchievement } from '../game/rewards.js';
 import { HttpError } from '../errors.js';
-import { conversionsCount, createHabit } from '../habits/service.js';
-import type { CreateHabitInput, HabitContract, UnlockedAchievement } from '../habits/service.js';
-
-/** A drizzle transaction handle (same query API as `db`). */
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+import { createHabit } from '../habits/service.js';
+import type { CreateHabitInput, HabitContract } from '../habits/service.js';
 
 /** Shared API contract shape (plan: "Shared API contracts"). */
 export interface InboxItemContract {
@@ -56,7 +46,7 @@ function toContract(item: InboxItem): InboxItemContract {
     sourceUrl: item.sourceUrl,
     status: item.status,
     habitId: item.habitId,
-    taskId: null, // column added in Task 25
+    taskId: item.taskId, // set by convert-task (Task 27); null until then
     createdAt: item.createdAt.toISOString(),
   };
 }
@@ -85,98 +75,15 @@ export async function listItems(userId: string, all: boolean): Promise<InboxItem
   return rows.map(toContract);
 }
 
-/**
- * Acquire the user's row lock (SELECT ... FOR UPDATE) for the rest of the
- * transaction — copied from the lockUserRow pattern in habits/service.ts.
- * It serializes same-user reward transactions, so the conversions count and
- * the achievement threshold checks below can't race a parallel convert or
- * check-in (each threshold fires exactly once).
- */
-async function lockUserRow(tx: Tx, userId: string): Promise<{ xpTotal: number; timezone: string }> {
-  const [user] = await tx
-    .select({ xpTotal: users.xpTotal, timezone: users.timezone })
-    .from(users)
-    .where(eq(users.id, userId))
-    .for('update');
-  if (!user) throw new HttpError(401, 'unauthenticated', 'Invalid session');
-  return user;
-}
-
-/**
- * Conversion achievement check — same ctx semantics as the check-in
- * transaction in habits/service.ts (Task 25 may extract a shared
- * game/rewards.ts helper). Conversion grants no XP, so level comes straight
- * from the locked row's xpTotal.
- */
-async function unlockAchievements(
-  tx: Tx,
-  userId: string,
-  user: { xpTotal: number; timezone: string },
-): Promise<UnlockedAchievement[]> {
-  const today = localDateFor(user.timezone);
-  const checkinRows = await tx
-    .select({ localDate: checkins.localDate })
-    .from(checkins)
-    .where(eq(checkins.userId, userId));
-  const todayCategoryRows = await tx
-    .selectDistinct({ categoryId: habits.categoryId })
-    .from(checkins)
-    .innerJoin(habits, eq(checkins.habitId, habits.id))
-    .where(and(eq(checkins.userId, userId), eq(checkins.localDate, today)));
-  const unlockedRows = await tx
-    .select({ achievementId: userAchievements.achievementId })
-    .from(userAchievements)
-    .where(eq(userAchievements.userId, userId));
-
-  const newIds = checkAchievements({
-    totalCheckins: checkinRows.length,
-    habitStreak: 0, // converting changes no per-habit streak
-    dayStreak: dayStreak(new Set(checkinRows.map((r) => r.localDate)), today),
-    level: levelFromXp(user.xpTotal),
-    conversions: await conversionsCount(tx, userId), // includes the item just converted
-    categoriesToday: todayCategoryRows.length,
-    unlocked: new Set(unlockedRows.map((r) => r.achievementId)),
-  });
-  if (newIds.length === 0) return [];
-
-  // Conflict-safe insert + hydration, copied from the check-in transaction:
-  // build the response from the RETURNED rows only so a (theoretical) racing
-  // unlock never reports a duplicate.
-  const inserted = await tx
-    .insert(userAchievements)
-    .values(newIds.map((achievementId) => ({ userId, achievementId })))
-    .onConflictDoNothing()
-    .returning();
-  if (inserted.length === 0) return [];
-  const defs = await tx
-    .select()
-    .from(achievements)
-    .where(
-      inArray(
-        achievements.id,
-        inserted.map((r) => r.achievementId),
-      ),
-    );
-  const defById = new Map(defs.map((d) => [d.id, d]));
-  return inserted.map((r) => {
-    const def = defById.get(r.achievementId)!; // FK guarantees the catalog row exists
-    return {
-      id: r.achievementId,
-      name: def.name,
-      description: def.description,
-      emoji: def.emoji,
-      unlockedAt: r.unlockedAt.toISOString(),
-    };
-  });
-}
-
 export async function convertItem(
   userId: string,
   itemId: string,
   input: ConvertInput,
 ): Promise<ConvertResult> {
   return db.transaction(async (tx) => {
-    // Row lock FIRST — see lockUserRow for why this ordering matters.
+    // Row lock FIRST (rewards.ts lockUserRow comment explains why): the
+    // conversions count and achievement thresholds below can't race a
+    // parallel convert or check-in — each threshold fires exactly once.
     const user = await lockUserRow(tx, userId);
 
     const [item] = await tx
@@ -209,7 +116,11 @@ export async function convertItem(
       .returning();
     if (!updated) throw alreadyTriaged();
 
-    const unlockedAchievements = await unlockAchievements(tx, userId, user);
+    // Conversion grants no XP, so level comes straight from the locked row.
+    const unlockedAchievements: UnlockedAchievement[] = await awardAchievements(tx, userId, {
+      today: localDateFor(user.timezone),
+      level: levelFromXp(user.xpTotal),
+    });
     return { item: toContract(updated), habit, unlockedAchievements };
   });
 }

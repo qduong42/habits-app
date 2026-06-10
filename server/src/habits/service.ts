@@ -1,23 +1,17 @@
-import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or } from 'drizzle-orm';
 import { db } from '../db/client.js';
-import {
-  achievements,
-  categories,
-  checkins,
-  habits,
-  inboxItems,
-  userAchievements,
-  users,
-} from '../db/schema.js';
+import { categories, checkins, habits, users } from '../db/schema.js';
 import type { Category, Habit } from '../db/schema.js';
 import { isoWeekOf, localDateFor } from '../game/dates.js';
 import { checkinXp, levelFromXp } from '../game/xp.js';
-import { dailyStreak, dayStreak, weeklyStreak } from '../game/streaks.js';
-import { checkAchievements } from '../game/achievements.js';
+import { dailyStreak, weeklyStreak } from '../game/streaks.js';
+import { adjustXp, awardAchievements, lockUserRow } from '../game/rewards.js';
+import type { Tx, UnlockedAchievement } from '../game/rewards.js';
 import { HttpError } from '../errors.js';
 
-/** A drizzle transaction handle (same query API as `db`). */
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+// Re-exported for existing importers (inbox/service.ts, tests); the
+// definition moved to game/rewards.ts with the shared reward helpers.
+export type { UnlockedAchievement } from '../game/rewards.js';
 
 /**
  * Either the pool-backed `db` or a transaction handle. The habit-creation
@@ -282,18 +276,6 @@ export async function updateHabit(
   return habitContract(userId, habitId);
 }
 
-/**
- * Dump items already converted into a habit (tasks join the count in Task 25).
- * Checked on BOTH checkin and convert events.
- */
-export async function conversionsCount(ex: DbOrTx, userId: string): Promise<number> {
-  const [row] = await ex
-    .select({ count: sql<number>`count(*)::int` })
-    .from(inboxItems)
-    .where(and(eq(inboxItems.userId, userId), eq(inboxItems.status, 'converted')));
-  return row!.count;
-}
-
 export async function archiveHabit(userId: string, habitId: string): Promise<void> {
   // Already-archived habits are hidden everywhere else, so re-archive is 404 too.
   const updated = await db
@@ -302,15 +284,6 @@ export async function archiveHabit(userId: string, habitId: string): Promise<voi
     .where(and(eq(habits.id, habitId), eq(habits.userId, userId), isNull(habits.archivedAt)))
     .returning({ id: habits.id });
   if (updated.length === 0) throw notFound();
-}
-
-/** Achievement contract: unlockedAt is non-null for fresh unlocks. */
-export interface UnlockedAchievement {
-  id: string;
-  name: string;
-  description: string;
-  emoji: string;
-  unlockedAt: string;
 }
 
 /** POST /habits/:id/checkin contract (plan: "Shared API contracts"). */
@@ -348,39 +321,6 @@ async function ownedHabit(tx: Tx, userId: string, habitId: string): Promise<Habi
     .where(and(eq(habits.id, habitId), eq(habits.userId, userId)));
   if (!habit) throw notFound();
   return habit;
-}
-
-async function userTodayFor(tx: Tx, userId: string): Promise<string> {
-  const [user] = await tx
-    .select({ timezone: users.timezone })
-    .from(users)
-    .where(eq(users.id, userId));
-  if (!user) throw new HttpError(401, 'unauthenticated', 'Invalid session');
-  return localDateFor(user.timezone);
-}
-
-/**
- * Acquire the user's row lock (SELECT ... FOR UPDATE) for the rest of the
- * transaction. MUST run before loadRewardState in every reward transaction.
- *
- * This lock is load-bearing: it serializes same-user reward transactions so
- * loadRewardState always sees the prior transaction's inserts/deletes. It
- * guarantees:
- * - day-bonus correctness (two parallel check-ins can't both observe an
- *   "incomplete day minus me" snapshot and both award — or both skip — the
- *   25-point bonus);
- * - totalCheckins achievement thresholds are evaluated against a serialized
- *   count, so threshold crossings fire exactly once;
- * - undo can't double-charge the 25-point day bonus when two undos race;
- * - the userAchievements PK can't be hit by two transactions inserting the
- *   same badge (the conflict-safe insert below is belt-and-braces only).
- */
-async function lockUserRow(tx: Tx, userId: string): Promise<void> {
-  await tx
-    .select({ xpTotal: users.xpTotal })
-    .from(users)
-    .where(eq(users.id, userId))
-    .for('update');
 }
 
 interface RewardState {
@@ -439,26 +379,16 @@ function allScheduledDone(
   });
 }
 
-/** Atomic xp_total adjustment; `delta` may be negative (floored at 0). */
-async function adjustXp(tx: Tx, userId: string, delta: number): Promise<number> {
-  const [updated] = await tx
-    .update(users)
-    .set({ xpTotal: sql`GREATEST(${users.xpTotal} + ${delta}, 0)` })
-    .where(eq(users.id, userId))
-    .returning({ xpTotal: users.xpTotal });
-  return updated!.xpTotal;
-}
-
 export async function checkinHabit(userId: string, habitId: string): Promise<CheckinResult> {
   try {
     return await db.transaction(async (tx) => {
-      // Row lock FIRST — see lockUserRow for why this ordering matters.
-      await lockUserRow(tx, userId);
+      // Row lock FIRST (rewards.ts lockUserRow comment explains why).
+      const user = await lockUserRow(tx, userId);
       const habit = await ownedHabit(tx, userId, habitId);
       if (habit.archivedAt !== null) {
         throw new HttpError(400, 'archived', 'Cannot check in an archived habit');
       }
-      const today = await userTodayFor(tx, userId);
+      const today = localDateFor(user.timezone);
 
       // A duplicate aborts the transaction here; the 409 mapping happens
       // OUTSIDE the transaction (Rule 11) because the throw rolls it back.
@@ -474,56 +404,14 @@ export async function checkinHabit(userId: string, habitId: string): Promise<Che
       const level = levelFromXp(xpTotal);
       const leveledUp = level > levelFromXp(xpTotal - xpGained);
 
-      // Achievement context — all post-insert, level post-increment.
-      const todayCategoryRows = await tx
-        .selectDistinct({ categoryId: habits.categoryId })
-        .from(checkins)
-        .innerJoin(habits, eq(checkins.habitId, habits.id))
-        .where(and(eq(checkins.userId, userId), eq(checkins.localDate, today)));
-      const unlockedRows = await tx
-        .select({ achievementId: userAchievements.achievementId })
-        .from(userAchievements)
-        .where(eq(userAchievements.userId, userId));
-      const newIds = checkAchievements({
-        totalCheckins: checkinRows.length,
-        habitStreak,
-        dayStreak: dayStreak(new Set(checkinRows.map((r) => r.localDate)), today),
+      // Achievement ctx — all post-insert, level post-increment; the shared
+      // helper reuses the already-loaded check-in rows.
+      const unlockedAchievements: UnlockedAchievement[] = await awardAchievements(tx, userId, {
+        today,
         level,
-        conversions: await conversionsCount(tx, userId),
-        categoriesToday: todayCategoryRows.length,
-        unlocked: new Set(unlockedRows.map((r) => r.achievementId)),
+        habitStreak,
+        checkinRows,
       });
-
-      let unlockedAchievements: UnlockedAchievement[] = [];
-      if (newIds.length > 0) {
-        // Belt-and-braces: the row lock above already serializes same-user
-        // transactions, but should an unlock ever race anyway, the loser hits
-        // the conflict, inserts nothing, and (building the response from the
-        // RETURNED rows only) reports no duplicate unlock.
-        const inserted = await tx
-          .insert(userAchievements)
-          .values(newIds.map((achievementId) => ({ userId, achievementId })))
-          .onConflictDoNothing()
-          .returning();
-        if (inserted.length > 0) {
-          const insertedIds = inserted.map((r) => r.achievementId);
-          const defs = await tx
-            .select()
-            .from(achievements)
-            .where(inArray(achievements.id, insertedIds));
-          const defById = new Map(defs.map((d) => [d.id, d]));
-          unlockedAchievements = inserted.map((r) => {
-            const def = defById.get(r.achievementId)!; // FK guarantees the catalog row exists
-            return {
-              id: r.achievementId,
-              name: def.name,
-              description: def.description,
-              emoji: def.emoji,
-              unlockedAt: r.unlockedAt.toISOString(),
-            };
-          });
-        }
-      }
 
       return { xpGained, xpTotal, level, leveledUp, habitStreak, unlockedAchievements };
     });
@@ -544,8 +432,8 @@ export async function checkinHabit(userId: string, habitId: string): Promise<Che
  */
 export async function undoCheckin(userId: string, habitId: string): Promise<UndoResult> {
   return db.transaction(async (tx) => {
-    // Row lock FIRST — see lockUserRow for why this ordering matters.
-    await lockUserRow(tx, userId);
+    // Row lock FIRST (rewards.ts lockUserRow comment explains why).
+    const user = await lockUserRow(tx, userId);
     const habit = await ownedHabit(tx, userId, habitId);
     if (habit.archivedAt !== null) {
       // Mirrors checkinHabit: without this, checkin → archive → undo would
@@ -553,7 +441,7 @@ export async function undoCheckin(userId: string, habitId: string): Promise<Undo
       // exploit the day-bonus math.
       throw new HttpError(400, 'archived', 'Cannot undo a check-in on an archived habit');
     }
-    const today = await userTodayFor(tx, userId);
+    const today = localDateFor(user.timezone);
 
     // userId predicate is defense-in-depth: ownedHabit already proved
     // ownership, but the delete must never touch another user's rows.
