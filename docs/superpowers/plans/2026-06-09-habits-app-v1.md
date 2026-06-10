@@ -655,7 +655,7 @@ Definitions: recurring `overdue` = `nextDue <= now` for one-offs `dueDate < toda
 
 ### Task 23: Dedicated refactor pass
 
-- [ ] **Step 1:** Re-read all of `server/src` and `web/src`: collapse duplication (esp. habit status computation used by routes/stats/nudge, and the rewards transaction shared by check-ins and task completions — each should live once in `service.ts`/`game/`), dead code, naming drift vs the contracts section and CONTEXT.md language (Dump/Triage/Check-in/Completion). No behavior changes; `npm run verify` green before and after. Commit: `refactor: consolidate habit status logic, naming cleanup`
+- [ ] **Step 1:** Re-read all of `server/src` and `web/src`: collapse duplication (esp. habit status computation used by routes/stats/nudge, and the rewards transaction shared by check-ins and task completions — each should live once in `service.ts`/`game/`), dead code, naming drift vs the contracts section and CONTEXT.md language (Dump/Triage/Check-in/Completion). Carry-overs from reviews: add indexes `tasks(user_id)` + `task_completions(task_id, created_at)` (migration) and replace listTasks' load-all-completions reduce with a `DISTINCT ON`/window query; level/leveledUp + undo-result duplication between habits/tasks services → rewards.ts; parseBody duplication across routers; CategoryContract import direction (move to categories or shared contracts module). No behavior changes; `npm run verify` green before and after. Commit: `refactor: consolidate habit status logic, naming cleanup`
 
 ### Task 24: QA report
 
