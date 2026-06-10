@@ -39,6 +39,8 @@ export default function TaskRow({ task, onToggle, onMenu }: TaskRowProps) {
       ) : (
         <button
           type="button"
+          role="checkbox"
+          aria-checked={done}
           className={'check-square' + (done ? ' check-square-done' : '')}
           aria-label={done ? `Undo ${task.name}` : `Complete ${task.name}`}
           onClick={() => onToggle(task, !done)}

@@ -40,7 +40,7 @@ export interface Achievement {
   unlockedAt: string | null;
 }
 
-/** POST /habits/:id/checkin — XP fields are zeroed until Task 13. */
+/** POST /habits/:id/checkin. */
 export interface CheckinResponse {
   xpGained: number;
   xpTotal: number;
@@ -51,8 +51,9 @@ export interface CheckinResponse {
 }
 
 /**
- * DELETE /habits/:id/checkin. NOTE: when the server floor-clamps XP at 0,
- * xpLost may exceed the actual deduction — always trust xpTotal/level.
+ * DELETE /habits/:id/checkin (and DELETE /tasks/:id/complete — same shape).
+ * NOTE: when the server floor-clamps XP at 0, xpLost may exceed the actual
+ * deduction — always trust xpTotal/level.
  */
 export interface UndoResponse {
   ok: boolean;

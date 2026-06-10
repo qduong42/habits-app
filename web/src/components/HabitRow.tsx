@@ -22,6 +22,8 @@ export default function HabitRow({ habit, onToggle, onMenu }: HabitRowProps) {
     <div className={'habit-row' + (doneStyle ? ' habit-row-done' : '')}>
       <button
         type="button"
+        role="checkbox"
+        aria-checked={habit.doneToday}
         className={'check-circle' + (habit.doneToday ? ' check-circle-done' : '')}
         disabled={circleDisabled}
         aria-label={habit.doneToday ? `Uncheck ${habit.name}` : `Check off ${habit.name}`}

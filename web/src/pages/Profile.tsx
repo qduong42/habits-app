@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { ApiError, apiFetch } from '../api';
 import { currentSubscription, disablePush, enablePush, pushSupported } from '../push';
-import { useMe } from '../useMe';
+import { useMe, type Me } from '../useMe';
 import type { Achievement } from '../types';
 
 const DEFAULT_NUDGE_TIME = '20:00';
@@ -48,9 +48,31 @@ export default function Profile() {
     queryFn: () => apiFetch<Achievement[]>('/achievements'),
   });
 
+  // Optimistic: the nudge switch / timezone select reflect the new value
+  // immediately via the ['me'] cache; a failure rolls back and surfaces the
+  // error below, and the settle-time invalidation re-syncs either way.
   const settings = useMutation({
     mutationFn: (body: SettingsBody) =>
       apiFetch('/me/settings', { method: 'PUT', body: JSON.stringify(body) }),
+    onMutate: async (body: SettingsBody) => {
+      await queryClient.cancelQueries({ queryKey: ['me'] });
+      const previous = queryClient.getQueryData<Me>(['me']);
+      queryClient.setQueryData<Me>(['me'], (old) =>
+        old === undefined
+          ? undefined
+          : {
+              ...old,
+              ...(body.nudgeTime !== undefined ? { nudgeTime: body.nudgeTime } : {}),
+              ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
+            },
+      );
+      return { previous };
+    },
+    onError: (_err, _body, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(['me'], context.previous);
+      }
+    },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['me'] }),
   });
 
@@ -148,8 +170,10 @@ export default function Profile() {
               role="switch"
               aria-labelledby="nudge-label"
               checked={nudgeOn}
-              disabled={!me.data || settings.isPending}
+              disabled={!me.data}
               onChange={(e) =>
+                // Optimistic (see the settings mutation): the switch flips
+                // immediately from the ['me'] cache, no pending lock-out.
                 settings.mutate({ nudgeTime: e.target.checked ? time : null })
               }
             />
@@ -167,11 +191,11 @@ export default function Profile() {
               className="settings-time"
               type="time"
               value={time}
-              disabled={settings.isPending}
-              onChange={(e) => {
-                setTime(e.target.value);
-                // A time input emits either '' or a complete HH:MM.
-                if (e.target.value) settings.mutate({ nudgeTime: e.target.value });
+              onChange={(e) => setTime(e.target.value)}
+              // Save once on leaving the field, not per spinner tick/keystroke.
+              // A time input emits either '' or a complete HH:MM.
+              onBlur={() => {
+                if (time && time !== serverNudgeTime) settings.mutate({ nudgeTime: time });
               }}
             />
           </div>
