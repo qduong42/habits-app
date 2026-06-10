@@ -5,6 +5,7 @@ import { db } from '../db/client.js';
 import { users } from '../db/schema.js';
 import { HttpError } from '../errors.js';
 import { requireAuth, type AuthedRequest } from '../auth/middleware.js';
+import { rescheduleNudge } from '../push/scheduler.js';
 
 // IANA zone names the runtime actually supports — the only valid timezones.
 const SUPPORTED_TIMEZONES = new Set(Intl.supportedValuesOf('timeZone'));
@@ -60,6 +61,10 @@ settingsRouter.put('/settings', async (req, res) => {
   if (!updated) {
     throw new HttpError(401, 'unauthenticated', 'Invalid session');
   }
+
+  // Either field changing (the schema requires at least one) moves the daily
+  // nudge job: new time, new wall-clock zone, or cancellation (null).
+  await rescheduleNudge(userId);
 
   res.json({
     ok: true,

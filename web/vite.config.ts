@@ -8,6 +8,13 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Hand-written SW (src/sw.ts): the same app-shell precaching the old
+      // generateSW config produced PLUS push/notificationclick handlers for
+      // the daily nudge — generateSW can't carry custom handlers and one
+      // scope allows only one service worker.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       manifest: {
         name: 'Habits',
         short_name: 'Habits',
@@ -28,12 +35,8 @@ export default defineConfig({
           },
         ],
       },
-      workbox: {
-        // Cached app shell only (the precached build assets). The API stays
-        // network-only: never serve index.html for /api navigations, and no
-        // runtime caching rules are defined.
-        navigateFallbackDenylist: [/^\/api/],
-      },
+      // The /api network-only rule (navigateFallbackDenylist equivalent)
+      // lives in src/sw.ts now: NavigationRoute denylist + no runtime caching.
     }),
   ],
   server: {

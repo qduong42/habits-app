@@ -2,10 +2,11 @@
 // (full catalog; locked badges grayed with 🔒 and their description still
 // visible so they read as goals), and logout.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { apiFetch } from '../api';
+import { ApiError, apiFetch } from '../api';
+import { currentSubscription, disablePush, enablePush, pushSupported } from '../push';
 import { useMe } from '../useMe';
 import type { Achievement } from '../types';
 
@@ -65,6 +66,55 @@ export default function Profile() {
   }
 
   const nudgeOn = serverNudgeTime !== null;
+
+  // --- Push notifications ------------------------------------------------
+  // Only offered where the browser supports SW + Push. The VAPID key fetch
+  // doubles as the server-side feature flag: a 503 push_disabled means the
+  // server has no VAPID keys, so the button is replaced by a hint.
+  const supported = pushSupported();
+  const [pushOn, setPushOn] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushError, setPushError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!supported) return;
+    let cancelled = false;
+    void currentSubscription().then((sub) => {
+      if (!cancelled) setPushOn(sub !== null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [supported]);
+
+  const vapid = useQuery({
+    queryKey: ['push', 'vapid-key'],
+    queryFn: () => apiFetch<{ key: string }>('/push/vapid-public-key'),
+    enabled: supported,
+    retry: false,
+    staleTime: Infinity,
+  });
+  const pushDisabledOnServer =
+    vapid.error instanceof ApiError && vapid.error.code === 'push_disabled';
+
+  async function togglePush() {
+    setPushBusy(true);
+    setPushError(null);
+    try {
+      if (pushOn) {
+        await disablePush();
+        setPushOn(false);
+      } else {
+        if (!vapid.data) throw new Error('Push key not available');
+        await enablePush(vapid.data.key);
+        setPushOn(true);
+      }
+    } catch (err) {
+      setPushError(err instanceof Error ? err.message : 'Could not update notifications');
+    } finally {
+      setPushBusy(false);
+    }
+  }
 
   const [loggingOut, setLoggingOut] = useState(false);
   async function logout() {
@@ -154,6 +204,28 @@ export default function Profile() {
             </optgroup>
           </select>
         </div>
+
+        {supported && (
+          <div className="settings-row">
+            <span className="settings-label" id="push-label">
+              Notifications
+            </span>
+            {pushDisabledOnServer ? (
+              <span className="settings-hint">Not configured on the server</span>
+            ) : (
+              <button
+                type="button"
+                className="btn-secondary"
+                aria-labelledby="push-label"
+                disabled={pushBusy || vapid.isPending || vapid.isError}
+                onClick={() => void togglePush()}
+              >
+                {pushBusy ? 'Working…' : pushOn ? 'Disable notifications' : 'Enable notifications'}
+              </button>
+            )}
+          </div>
+        )}
+        {pushError && <p className="form-error">{pushError}</p>}
 
         {settings.error && (
           <p className="form-error">Could not save settings: {settings.error.message}</p>

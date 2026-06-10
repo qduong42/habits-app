@@ -642,9 +642,9 @@ Definitions: recurring `overdue` = `nextDue <= now` for one-offs `dueDate < toda
 - Create: `server/src/push/routes.ts`, `server/src/push/nudge.ts`; Modify: `server/src/app.ts`, `server/src/index.ts`, `.env.example` (VAPID keys), `web/src/pages/Profile.tsx` (+ enable-notifications button), `web/src/sw-push.ts` (push event → showNotification, click → open `/`)
 - Test: `server/test/nudge.test.ts`
 
-- [ ] **Step 1: TDD nudge logic** — `openHabitsCount(userId, today)` (scheduled-but-not-done count) and `dueTasksCount(userId, now)` (overdue + today groups via `dueness.ts`) tested via seeded data; `sendNudge(user)` with injected `webpush` fake: sends `{title: '🔥 2 habits · 1 task left today'}` (omit a zero part; singular/plural correct) only when total>0 and subscription exists; on 410 clears `push_subscription`.
-- [ ] **Step 2: Scheduler** — `scheduleAllNudges()` on boot + reschedule on settings change: `node-schedule` cron at user's `nudgeTime` interpreted in user TZ (use `{ rule, tz }` recurrence). Generate VAPID via `npx web-push generate-vapid-keys`, document in `.env.example`; `GET /api/push/vapid-public-key` route; frontend: `pushManager.subscribe` → `POST /push/subscribe`.
-- [ ] **Step 3: Green + verify + commit** — `feat: daily nudge web push`
+- [x] **Step 1: TDD nudge logic** — `openHabitsCount(userId, today)` (scheduled-but-not-done count) and `dueTasksCount(userId, now)` (overdue + today groups via `dueness.ts`) tested via seeded data; `sendNudge(user)` with injected `webpush` fake: sends `{title: '🔥 2 habits · 1 task left today'}` (omit a zero part; singular/plural correct) only when total>0 and subscription exists; on 410 clears `push_subscription`.
+- [x] **Step 2: Scheduler** — `scheduleAllNudges()` on boot + reschedule on settings change: `node-schedule` cron at user's `nudgeTime` interpreted in user TZ (use `{ rule, tz }` recurrence). Generate VAPID via `npx web-push generate-vapid-keys`, document in `.env.example`; `GET /api/push/vapid-public-key` route; frontend: `pushManager.subscribe` → `POST /push/subscribe`.
+- [x] **Step 3: Green + verify + commit** — `feat: daily nudge web push`
 
 ### Task 22: Production compose + README
 

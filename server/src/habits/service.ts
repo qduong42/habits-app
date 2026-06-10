@@ -323,7 +323,7 @@ async function ownedHabit(tx: Tx, userId: string, habitId: string): Promise<Habi
   return habit;
 }
 
-interface RewardState {
+export interface RewardState {
   /** Active (non-archived) habits — the day-completion population. */
   activeHabits: Pick<Habit, 'id' | 'frequencyType' | 'weeklyTarget'>[];
   /** ALL of the user's checkins (incl. archived habits' — history counts). */
@@ -331,7 +331,8 @@ interface RewardState {
   datesByHabit: Map<string, Set<string>>;
 }
 
-async function loadRewardState(tx: Tx, userId: string): Promise<RewardState> {
+/** Exported for the nudge job (push/nudge.ts) — selects only, so `db` works too. */
+export async function loadRewardState(tx: DbOrTx, userId: string): Promise<RewardState> {
   const activeHabits = await tx
     .select({
       id: habits.id,
@@ -359,24 +360,40 @@ async function loadRewardState(tx: Tx, userId: string): Promise<RewardState> {
  * scheduled-and-done even when the check-in just reached the target; a weekly
  * habit NOT done today whose target is already met is unscheduled and
  * therefore excluded from the bonus requirement.
+ *
+ * Exported as a COUNT so the daily nudge (push/nudge.ts) shares the exact
+ * day-bonus semantics: a habit is "open" iff it is scheduled and not done.
  */
-function allScheduledDone(
+export function openScheduledCount(
   activeHabits: RewardState['activeHabits'],
   datesByHabit: Map<string, Set<string>>,
   today: string,
-): boolean {
+): number {
   const currentWeek = isoWeekOf(today);
-  return activeHabits.every((h) => {
+  let open = 0;
+  for (const h of activeHabits) {
     const dates = datesByHabit.get(h.id) ?? new Set<string>();
-    if (dates.has(today)) return true; // done today → scheduled-and-done
-    if (h.frequencyType === 'daily') return false; // daily always scheduled
+    if (dates.has(today)) continue; // done today → scheduled-and-done
+    if (h.frequencyType === 'daily') {
+      open += 1; // daily always scheduled
+      continue;
+    }
     let weekCount = 0;
     for (const d of dates) {
       if (isoWeekOf(d) === currentWeek) weekCount += 1;
     }
     // weekly, not done today: scheduled (and open) iff under target
-    return weekCount >= (h.weeklyTarget ?? 0);
-  });
+    if (weekCount < (h.weeklyTarget ?? 0)) open += 1;
+  }
+  return open;
+}
+
+function allScheduledDone(
+  activeHabits: RewardState['activeHabits'],
+  datesByHabit: Map<string, Set<string>>,
+  today: string,
+): boolean {
+  return openScheduledCount(activeHabits, datesByHabit, today) === 0;
 }
 
 export async function checkinHabit(userId: string, habitId: string): Promise<CheckinResult> {

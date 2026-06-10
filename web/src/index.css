@@ -958,6 +958,11 @@ body {
   margin: 12px 0 0;
 }
 
+.settings-hint {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
 /* iOS-style on/off switch (a visually-restyled checkbox). */
 .switch {
   position: relative;
