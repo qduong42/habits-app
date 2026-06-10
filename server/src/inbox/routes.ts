@@ -1,0 +1,68 @@
+import { Router } from 'express';
+import { z } from 'zod';
+import { requireAuth } from '../auth/middleware.js';
+import { parseBody, userIdOf, uuidParam } from '../validation.js';
+import { createTaskSchema } from '../tasks/routes.js';
+import {
+  captureItem,
+  convertItem,
+  convertItemToTask,
+  discardItem,
+  listItems,
+} from './service.js';
+
+const captureSchema = z.object({
+  text: z.string().trim().min(1).max(5000),
+  sourceUrl: z.string().max(2000).optional(),
+});
+
+// Same field rules as POST /habits (habits/routes.ts createSchema) minus
+// sourceUrl — the URL carries over from the dump item, never from the client.
+const convertSchema = z
+  .object({
+    name: z.string().trim().min(1),
+    categoryId: z.uuid(),
+    frequencyType: z.enum(['daily', 'weekly']),
+    weeklyTarget: z.number().int().min(1).max(7).optional(),
+    notes: z.string().optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.frequencyType === 'weekly' && v.weeklyTarget === undefined) {
+      ctx.addIssue({ code: 'custom', path: ['weeklyTarget'], message: 'required for weekly habits' });
+    }
+    if (v.frequencyType === 'daily' && v.weeklyTarget !== undefined) {
+      ctx.addIssue({ code: 'custom', path: ['weeklyTarget'], message: 'not allowed for daily habits' });
+    }
+  });
+
+const itemId = (raw: string) => uuidParam(raw, 'Inbox item not found');
+
+export const inboxRouter = Router();
+
+inboxRouter.use(requireAuth);
+
+inboxRouter.post('/', async (req, res) => {
+  const input = parseBody(captureSchema, req.body);
+  res.status(201).json(await captureItem(userIdOf(req), input));
+});
+
+inboxRouter.get('/', async (req, res) => {
+  res.json(await listItems(userIdOf(req), req.query.all === '1'));
+});
+
+inboxRouter.post('/:id/convert', async (req, res) => {
+  const input = parseBody(convertSchema, req.body);
+  res.json(await convertItem(userIdOf(req), itemId(req.params.id), input));
+});
+
+// Same body rules as POST /tasks (shared schema): name ≤200, notes ≤5000,
+// dueDate XOR intervalHours. sourceUrl carries over from the item, never
+// from the client (createTaskSchema has no sourceUrl field).
+inboxRouter.post('/:id/convert-task', async (req, res) => {
+  const input = parseBody(createTaskSchema, req.body);
+  res.json(await convertItemToTask(userIdOf(req), itemId(req.params.id), input));
+});
+
+inboxRouter.post('/:id/discard', async (req, res) => {
+  res.json(await discardItem(userIdOf(req), itemId(req.params.id)));
+});

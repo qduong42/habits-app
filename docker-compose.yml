@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: habits
+      POSTGRES_PASSWORD: habits
+      POSTGRES_DB: habits
+    ports: ["5433:5432"]
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U habits"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+  api:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      DATABASE_URL: postgres://habits:habits@postgres:5432/habits
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      SEED_PASSWORD: ${SEED_PASSWORD:-changeme123}
+      # Optional — without keys the server boots and push answers 503.
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@example.com}
+    ports: ["3002:3001"]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+volumes:
+  postgres_data:
