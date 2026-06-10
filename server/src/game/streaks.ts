@@ -54,3 +54,47 @@ export function weeklyStreak(
 export function dayStreak(dates: Set<string>, today: string): number {
   return dailyStreak(dates, today);
 }
+
+/**
+ * Longest run of consecutive days ANYWHERE in history (not just the current
+ * one). No grace rule — past runs are complete by definition. O(n): each
+ * run is walked exactly once, starting from its first day.
+ */
+export function bestDailyStreak(dates: Set<string>): number {
+  let best = 0;
+  for (const start of dates) {
+    if (dates.has(addDays(start, -1))) continue; // not a run start
+    let len = 0;
+    let day = start;
+    while (dates.has(day)) {
+      len++;
+      day = addDays(day, 1);
+    }
+    if (len > best) best = len;
+  }
+  return best;
+}
+
+/**
+ * Longest run of consecutive ISO weeks with `counts.get(week) >= target`
+ * ANYWHERE in history. Weekly counterpart of bestDailyStreak; only weeks
+ * present in `counts` can qualify, so walking backwards from each run end
+ * terminates.
+ */
+export function bestWeeklyStreak(counts: Map<string, number>, target: number): number {
+  if (target <= 0) return 0; // mirror weeklyStreak's guard against unbounded walks
+  const met = (week: string) => (counts.get(week) ?? 0) >= target;
+  let best = 0;
+  for (const week of counts.keys()) {
+    if (!met(week)) continue;
+    // walk backwards from every qualifying week; run ends dominate the max
+    let len = 0;
+    let w = week;
+    while (met(w)) {
+      len++;
+      w = prevIsoWeek(w);
+    }
+    if (len > best) best = len;
+  }
+  return best;
+}

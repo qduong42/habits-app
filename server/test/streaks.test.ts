@@ -1,5 +1,11 @@
 import { test, expect } from 'vitest';
-import { dailyStreak, weeklyStreak, dayStreak } from '../src/game/streaks.js';
+import {
+  bestDailyStreak,
+  bestWeeklyStreak,
+  dailyStreak,
+  dayStreak,
+  weeklyStreak,
+} from '../src/game/streaks.js';
 import { addDays } from '../src/game/dates.js';
 
 // dailyStreak(dates: Set<string>, today: string): consecutive days ending today,
@@ -105,4 +111,78 @@ test('dayStreak grace and break behave like dailyStreak', () => {
   expect(dayStreak(new Set(['2026-06-07', '2026-06-08']), '2026-06-09')).toBe(2); // grace
   expect(dayStreak(new Set(['2026-06-07']), '2026-06-09')).toBe(0); // broken
   expect(dayStreak(new Set(), '2026-06-09')).toBe(0);
+});
+
+// --- bestDailyStreak (Task 17): longest consecutive run ANYWHERE in history ---
+
+test('bestDailyStreak of empty history is 0', () => {
+  expect(bestDailyStreak(new Set())).toBe(0);
+});
+
+test('bestDailyStreak of a single day is 1', () => {
+  expect(bestDailyStreak(new Set(['2026-06-09']))).toBe(1);
+});
+
+test('bestDailyStreak picks the longer of two disconnected runs', () => {
+  // run A: 06-01..06-04 (4 days), run B: 06-07..06-08 (2 days)
+  const d = new Set([
+    '2026-06-01',
+    '2026-06-02',
+    '2026-06-03',
+    '2026-06-04',
+    '2026-06-07',
+    '2026-06-08',
+  ]);
+  expect(bestDailyStreak(d)).toBe(4);
+});
+
+test('bestDailyStreak counts a long run exactly (30 days, with a stray earlier day)', () => {
+  const dates = new Set<string>(['2026-01-01']); // disconnected single day
+  let day = '2026-06-09';
+  for (let i = 0; i < 30; i++) {
+    dates.add(day);
+    day = addDays(day, -1);
+  }
+  expect(bestDailyStreak(dates)).toBe(30);
+});
+
+test('bestDailyStreak crosses a month boundary', () => {
+  expect(bestDailyStreak(new Set(['2026-05-30', '2026-05-31', '2026-06-01']))).toBe(3);
+});
+
+// --- bestWeeklyStreak (Task 17): longest consecutive run of target-met weeks ---
+
+test('bestWeeklyStreak of empty history is 0', () => {
+  expect(bestWeeklyStreak(new Map(), 3)).toBe(0);
+});
+
+test('bestWeeklyStreak of a single qualifying week is 1', () => {
+  expect(bestWeeklyStreak(new Map([['2026-W23', 3]]), 3)).toBe(1);
+});
+
+test('bestWeeklyStreak picks the longer of two runs, under-target weeks break runs', () => {
+  const m = new Map([
+    ['2026-W10', 3],
+    ['2026-W11', 4], // run A: 2 weeks
+    ['2026-W12', 2], // under target — breaks
+    ['2026-W13', 3],
+    ['2026-W14', 3],
+    ['2026-W15', 7], // run B: 3 weeks
+  ]);
+  expect(bestWeeklyStreak(m, 3)).toBe(3);
+});
+
+test('bestWeeklyStreak spans a year boundary (2025-W52 → 2026-W01)', () => {
+  const m = new Map([
+    ['2025-W51', 3],
+    ['2025-W52', 3],
+    ['2026-W01', 3],
+  ]);
+  expect(bestWeeklyStreak(m, 3)).toBe(3);
+});
+
+test('bestWeeklyStreak with target <= 0 is 0 (and terminates)', () => {
+  expect(bestWeeklyStreak(new Map(), 0)).toBe(0);
+  expect(bestWeeklyStreak(new Map([['2026-W24', 5]]), 0)).toBe(0);
+  expect(bestWeeklyStreak(new Map([['2026-W24', 5]]), -1)).toBe(0);
 });

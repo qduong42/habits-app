@@ -9,6 +9,7 @@ import { authRouter } from './auth/routes.js';
 import { categoriesRouter } from './categories/routes.js';
 import { habitsRouter } from './habits/routes.js';
 import { inboxRouter } from './inbox/routes.js';
+import { statsRouter } from './stats/routes.js';
 import { tasksRouter } from './tasks/routes.js';
 import { HttpError } from './errors.js';
 
@@ -31,6 +32,7 @@ export function createApp() {
   app.use('/api/achievements', achievementsRouter);
   app.use('/api/inbox', inboxRouter);
   app.use('/api/tasks', tasksRouter);
+  app.use('/api/stats', statsRouter);
 
   // Mount all /api routers above this JSON 404 catch-all.
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'not_found', 'Not found')));

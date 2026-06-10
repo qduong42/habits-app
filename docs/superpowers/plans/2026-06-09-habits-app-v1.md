@@ -611,8 +611,8 @@ Definitions: recurring `overdue` = `nextDue <= now` for one-offs `dueDate < toda
 - Create: `server/src/stats/routes.ts`; Modify: `server/src/app.ts`
 - Test: `server/test/stats.test.ts`
 
-- [ ] **Step 1: Failing tests** — seed habits + checkins across days, assert full `GET /stats` contract: `dayStreak`, `totalCheckins`, `xpTotal`, `level`, per-habit `streak`, `bestStreak` (longest run anywhere in history — add `bestDailyStreak(dates)` to `streaks.ts` with unit test), `last28` percentage (daily: days done /28; weekly: weeks target-met /4, as %).
-- [ ] **Step 2: Implement + green + commit** — `feat(server): stats endpoint`
+- [x] **Step 1: Failing tests** — seed habits + checkins across days, assert full `GET /stats` contract: `dayStreak`, `totalCheckins`, `xpTotal`, `level`, per-habit `streak`, `bestStreak` (longest run anywhere in history — add `bestDailyStreak(dates)` to `streaks.ts` with unit test), `last28` percentage (daily: days done /28; weekly: weeks target-met /4, as %).
+- [x] **Step 2: Implement + green + commit** — `feat(server): stats endpoint`
 
 ### Task 18: Stats UI
 
