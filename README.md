@@ -51,8 +51,12 @@ idempotent seed, and serves API + SPA on **host port 3002**
 
 Put a TLS-terminating reverse proxy (Caddy, nginx, Traefik) in front:
 browsers only allow service workers — i.e. **PWA install and push
-notifications — over HTTPS** (localhost excepted). Set a real `JWT_SECRET`
-and `SEED_PASSWORD`, and add VAPID keys (below) if you want push.
+notifications — over HTTPS** (localhost excepted). Login also depends on it:
+with `NODE_ENV=production` the auth cookie is `Secure`, so on plain HTTP from
+a non-localhost address (e.g. a LAN IP) the browser drops it and login
+silently fails. Set a real `JWT_SECRET` and `SEED_PASSWORD`, and add VAPID
+keys (below) if you want push. The login body field is `name` (not
+`username`): `{"name": "huy", "password": "..."}`.
 
 ### Environment variables
 

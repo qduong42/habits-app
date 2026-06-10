@@ -25,8 +25,9 @@ services:
       # Optional — without keys the server boots and push answers 503.
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
-      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@example.com}
     ports: ["3002:3001"]
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy

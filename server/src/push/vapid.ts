@@ -49,7 +49,8 @@ export function configuredWebpush(): typeof webpush {
   const publicKey = process.env.VAPID_PUBLIC_KEY!;
   if (configuredFor !== publicKey) {
     webpush.setVapidDetails(
-      process.env.VAPID_SUBJECT ?? DEFAULT_VAPID_SUBJECT,
+      // `||` not `??`: compose passes VAPID_SUBJECT as "" when unset.
+      process.env.VAPID_SUBJECT || DEFAULT_VAPID_SUBJECT,
       publicKey,
       process.env.VAPID_PRIVATE_KEY!,
     );
