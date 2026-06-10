@@ -55,3 +55,12 @@ The single pool of XP from Check-ins (+10), Completions (+5), and the day-comple
 - "water the plants" sits in both the old household task-tracker (shared tasks) and this app — resolved: in v1 all Tasks are **personal-only**; shared household tasks are explicitly v2.
 - "convert" vs "triage" — resolved: **Triage** is the user-facing flow; `convert` survives only as API route naming.
 - "today/done" means two different time grains — resolved: **Habits** live on the **Local Date** grain (one Check-in per day); **Tasks** live on timestamps (a sub-daily Recurring Task can be due, done, and due again within one Local Date). See ADR-0001.
+- "history" means two different journals — resolved 2026-06-11: the Dump tab's **History** is the journal of *what was on your mind* (dump items by dump date); Today's **Done History** is the journal of *what you did* (Check-ins + Completions by local date, merged, read-only). Same UI pattern, different nouns.
+
+**Done History**:
+The read-only merged timeline of Check-ins and Completions at the bottom of Today, grouped by Local Date. A view over existing tables, not an event log (promotion to first-class deliberately deferred).
+_Avoid_: activity log, audit log, feed
+
+**Reminder**:
+An optional "look at this again" timestamp (`remindAt`) on a one-off Task that fires one push notification when reached; the Task stays visible in Today the whole time — a Reminder never hides or snoozes anything.
+_Avoid_: snooze, resurface, review date
