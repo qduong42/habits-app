@@ -114,8 +114,10 @@ export const inboxItems = pgTable('inbox_items', {
   status: text('status', { enum: ['open', 'converted', 'discarded'] })
     .notNull()
     .default('open'),
-  habitId: uuid('habit_id').references(() => habits.id), // set when triaged into a habit
-  taskId: uuid('task_id').references(() => tasks.id), // set when triaged into a task (Task 27 route)
+  // Links clear on habit/task deletion; the item stays 'converted' so the dump
+  // history survives.
+  habitId: uuid('habit_id').references(() => habits.id, { onDelete: 'set null' }), // set when triaged into a habit
+  taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'set null' }), // set when triaged into a task (Task 27 route)
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

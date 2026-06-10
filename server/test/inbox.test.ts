@@ -558,6 +558,43 @@ describe('POST /api/inbox/:id/convert-task (Task 27)', () => {
   });
 });
 
+describe('deleting a converted habit/task keeps the inbox item (FK ON DELETE SET NULL)', () => {
+  it('DELETE /api/tasks/:id on a converted task → 200; item stays converted with taskId null', async () => {
+    const u = await makeUser();
+    const itemId = await capture(u.cookie, { text: 'short-lived task' });
+    const converted = await convertTask(u.cookie, itemId, { name: 'Short-lived' });
+    expect(converted.status).toBe(200);
+    const taskId = converted.body.task.id as string;
+
+    const del = await request(app).delete(`/api/tasks/${taskId}`).set('Cookie', u.cookie);
+    expect(del.status).toBe(200);
+    expect(del.body).toEqual({ ok: true });
+
+    // the dump history survives — the link just clears
+    const [item] = await db.select().from(inboxItems).where(eq(inboxItems.id, itemId));
+    expect(item).toMatchObject({ status: 'converted', taskId: null, habitId: null });
+  });
+
+  it('DELETE /api/habits/:id on a converted habit → 200; item stays converted with habitId null', async () => {
+    const u = await makeUser();
+    const itemId = await capture(u.cookie, { text: 'short-lived habit' });
+    const converted = await convert(u.cookie, itemId, {
+      name: 'Short-lived habit',
+      categoryId: u.categoryId,
+      frequencyType: 'daily',
+    });
+    expect(converted.status).toBe(200);
+    const habitId = converted.body.habit.id as string;
+
+    const del = await request(app).delete(`/api/habits/${habitId}`).set('Cookie', u.cookie);
+    expect(del.status).toBe(200);
+    expect(del.body).toEqual({ ok: true });
+
+    const [item] = await db.select().from(inboxItems).where(eq(inboxItems.id, itemId));
+    expect(item).toMatchObject({ status: 'converted', habitId: null, taskId: null });
+  });
+});
+
 describe('POST /api/inbox/:id/discard', () => {
   it('marks the item discarded; convert afterwards → 409', async () => {
     const u = await makeUser();
