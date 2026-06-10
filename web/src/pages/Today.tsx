@@ -4,7 +4,7 @@
 // "🌱 Habits" (category sub-groups under light headers). Optimistic checks,
 // floating + opening the capture sheet, ⋯ row menus.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ApiError } from '../api';
 import ActionSheet from '../components/ActionSheet';
 import CaptureSheet from '../components/CaptureSheet';
@@ -80,19 +80,11 @@ export default function Today() {
   const [scheduledOpen, setScheduledOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [toast, setToast] = useState<XpToast | null>(null);
-  const [capturedToast, setCapturedToast] = useState(false);
   const [celebration, setCelebration] = useState<CelebrationData | null>(null);
 
   // Stable callbacks so Toast/Celebration effects don't restart every render.
   const clearToast = useCallback(() => setToast(null), []);
   const closeCelebration = useCallback(() => setCelebration(null), []);
-
-  // "Captured 💡" page toast — auto-clears; you stay on Today.
-  useEffect(() => {
-    if (!capturedToast) return;
-    const timer = setTimeout(() => setCapturedToast(false), 1800);
-    return () => clearTimeout(timer);
-  }, [capturedToast]);
 
   // Shared rewards feedback for habit check-ins AND task completions: XP chip
   // near the tapped row, celebration on level-up / achievement unlock.
@@ -292,14 +284,7 @@ export default function Today() {
             setEditTask(null);
             setTaskFormOpen(true);
           }}
-          onCaptured={() => setCapturedToast(true)}
         />
-      )}
-
-      {capturedToast && (
-        <div className="captured-toast" role="status">
-          Captured 💡
-        </div>
       )}
 
       {formOpen && (
