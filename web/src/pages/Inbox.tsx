@@ -1,19 +1,38 @@
 // Dump tab (API name: inbox) — zero-friction capture box at the top (type →
 // enter → posts → input clears, keep typing; collapsed optional link field),
 // a "Triage N items →" button opening the card-by-card flow (TriageCard),
-// and the open items below with the → Habit / Discard per-item shortcuts.
+// the open items below with → Task (FIRST, immediate one-off undated convert)
+// / → Habit / Discard per-item shortcuts, and the braindump History at the
+// bottom (collapsed date rows, lazily fetched on first expansion).
 
-import { useCallback, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from 'react';
 import Celebration, { type CelebrationData } from '../components/Celebration';
 import HabitForm from '../components/HabitForm';
 import TriageCard from '../components/TriageCard';
-import { formatAge } from '../format';
-import { useCapture, useDiscard, useInbox } from '../hooks/useInbox';
+import { formatAge, formatDumpDate, formatTime, localDateKey, taskNameFromDumpText } from '../format';
+import { useCapture, useConvertTask, useDiscard, useInbox, useInboxAll } from '../hooks/useInbox';
 import type { Achievement, ConvertResponse, InboxItem } from '../types';
+
+/** History status label: 🗑 / ✅ / 🌱; converted with both links null = deleted. */
+function historyStatusLabel(item: InboxItem): string {
+  if (item.status === 'discarded') return '🗑 discarded';
+  if (item.taskId !== null) return '✅ task';
+  if (item.habitId !== null) return '🌱 habit';
+  return 'converted (since deleted)';
+}
 
 export default function Inbox() {
   const { data: items, isPending, error } = useInbox();
   const capture = useCapture();
+  const convertTask = useConvertTask();
   const discard = useDiscard();
 
   const [text, setText] = useState('');
@@ -29,11 +48,38 @@ export default function Inbox() {
   // Snapshot of the open items when triage starts — fixes the "2 / 5"
   // progress denominator while actions remove items from the live query.
   const [triageQueue, setTriageQueue] = useState<InboxItem[] | null>(null);
+  // "Task created ✓" inline confirmation for the → Task quick action — the
+  // converted item leaves the open list, so the message lives above it.
+  const [taskCreated, setTaskCreated] = useState(false);
+  const taskCreatedTimer = useRef<number | undefined>(undefined);
+  // History: section toggle + per-date expansion. historyRequested latches
+  // true on first expansion and never resets — it fires the lazy ?all=1 query.
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyRequested, setHistoryRequested] = useState(false);
+  const [openDates, setOpenDates] = useState<ReadonlySet<string>>(new Set());
+  const history = useInboxAll(historyRequested);
 
   // Focus stays in the text input after every capture so you can keep typing.
   const textRef = useRef<HTMLInputElement>(null);
 
   const closeCelebration = useCallback(() => setCelebration(null), []);
+
+  useEffect(() => () => window.clearTimeout(taskCreatedTimer.current), []);
+
+  // Non-open items grouped by dump date (browser-local createdAt). The server
+  // returns createdAt desc, so Map insertion order is already newest-date
+  // first and items within a date are newest first.
+  const historyGroups = useMemo(() => {
+    const groups = new Map<string, InboxItem[]>();
+    for (const item of history.data ?? []) {
+      if (item.status === 'open') continue; // open items are the list above
+      const key = localDateKey(item.createdAt);
+      const group = groups.get(key);
+      if (group) group.push(item);
+      else groups.set(key, [item]);
+    }
+    return [...groups.entries()];
+  }, [history.data]);
 
   function handleCapture(e: FormEvent) {
     e.preventDefault();
@@ -70,21 +116,56 @@ export default function Inbox() {
     celebrate(res.unlockedAchievements);
   }
 
+  /** → Task quick action: immediate one-off undated convert, zero friction.
+   * Name = first line (≤200), notes = full text — mirrors the habit prefill
+   * rule. Scheduling happens later via the task's ⋯ Edit or the Triage flow. */
+  function quickTask(item: InboxItem) {
+    if (convertTask.isPending) return;
+    setActionError(null);
+    convertTask.mutate(
+      { itemId: item.id, input: { name: taskNameFromDumpText(item.text), notes: item.text } },
+      {
+        onSuccess: (res) => {
+          setTaskCreated(true);
+          window.clearTimeout(taskCreatedTimer.current);
+          taskCreatedTimer.current = window.setTimeout(() => setTaskCreated(false), 2500);
+          celebrate(res.unlockedAchievements);
+        },
+        onError: (err) => setActionError(err.message),
+      },
+    );
+  }
+
   function cancelDiscard() {
     setDiscardingId(null);
     setDiscardNote('');
   }
 
-  /** Enter in the note input — empty note discards without one. */
+  /** Enter in the note input — empty note discards without one. Clears the
+   * input only on success (matching TriageCard): on error the typed note
+   * stays put so it isn't lost. */
   function confirmDiscard(item: InboxItem) {
     if (discard.isPending) return;
     const note = discardNote.trim();
     setActionError(null);
     discard.mutate(
       { itemId: item.id, ...(note !== '' ? { note } : {}) },
-      { onError: (err) => setActionError(err.message) },
+      { onSuccess: () => cancelDiscard(), onError: (err) => setActionError(err.message) },
     );
-    cancelDiscard();
+  }
+
+  function toggleHistory() {
+    setHistoryOpen((open) => !open);
+    setHistoryRequested(true); // latch — fires the lazy ?all=1 query once
+  }
+
+  function toggleDate(key: string) {
+    setOpenDates((dates) => {
+      const next = new Set(dates);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   }
 
   function handleDiscardKeyDown(e: KeyboardEvent<HTMLInputElement>, item: InboxItem) {
@@ -140,6 +221,11 @@ export default function Inbox() {
       </form>
 
       {actionError && <p className="form-error">{actionError}</p>}
+      {taskCreated && (
+        <p className="dump-task-created" role="status">
+          Task created ✓
+        </p>
+      )}
 
       {isPending ? (
         <p className="placeholder">Loading…</p>
@@ -191,6 +277,14 @@ export default function Inbox() {
                     )}
                     <button
                       type="button"
+                      className="dump-btn dump-btn-task"
+                      onClick={() => quickTask(item)}
+                      disabled={convertTask.isPending}
+                    >
+                      → Task
+                    </button>
+                    <button
+                      type="button"
                       className="dump-btn dump-btn-habit"
                       onClick={() => setConvertItem(item)}
                     >
@@ -214,6 +308,57 @@ export default function Inbox() {
           </ul>
         </>
       )}
+
+      <section className="dump-history">
+        <button
+          type="button"
+          className="dump-history-toggle"
+          aria-expanded={historyOpen}
+          onClick={toggleHistory}
+        >
+          History
+        </button>
+        {historyOpen &&
+          (history.isPending ? (
+            <p className="placeholder">Loading…</p>
+          ) : history.error ? (
+            <p className="form-error">Could not load history: {history.error.message}</p>
+          ) : historyGroups.length === 0 ? (
+            <p className="placeholder">Nothing triaged yet.</p>
+          ) : (
+            <ul className="dump-history-dates">
+              {historyGroups.map(([key, group]) => (
+                <li key={key} className="dump-history-date">
+                  <button
+                    type="button"
+                    className="dump-history-date-toggle"
+                    aria-expanded={openDates.has(key)}
+                    onClick={() => toggleDate(key)}
+                  >
+                    {formatDumpDate(group[0]!.createdAt)} · {group.length} item
+                    {group.length === 1 ? '' : 's'}
+                  </button>
+                  {openDates.has(key) && (
+                    <ul className="dump-history-items">
+                      {group.map((item) => (
+                        <li key={item.id} className="dump-history-item">
+                          <div className="dump-history-item-top">
+                            <span className="dump-history-time">{formatTime(item.createdAt)}</span>
+                            <p className="dump-history-text">{item.text}</p>
+                            <span className="dump-history-status">{historyStatusLabel(item)}</span>
+                          </div>
+                          {item.discardNote !== null && (
+                            <p className="dump-history-note">{item.discardNote}</p>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ))}
+      </section>
 
       {triageQueue && (
         <TriageCard

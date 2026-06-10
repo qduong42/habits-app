@@ -20,6 +20,20 @@ export function useInbox() {
   });
 }
 
+/**
+ * ALL dump items (open + triaged), newest first — feeds the braindump History.
+ * Lazy: pass `enabled=false` until the History section is first expanded.
+ * Sharing the ['inbox'] key prefix means every mutation's
+ * invalidateQueries({queryKey: ['inbox']}) keeps this fresh too.
+ */
+export function useInboxAll(enabled: boolean) {
+  return useQuery({
+    queryKey: ['inbox', 'all'],
+    queryFn: () => apiFetch<InboxItem[]>('/inbox?all=1'),
+    enabled,
+  });
+}
+
 export function useCapture() {
   const queryClient = useQueryClient();
   return useMutation({

@@ -9,21 +9,12 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '../api';
-import { formatAge } from '../format';
+import { formatAge, taskNameFromDumpText } from '../format';
 import { useConvertTask, useDiscard } from '../hooks/useInbox';
 import HabitForm from './HabitForm';
 import type { Achievement, ConvertTaskInput, InboxItem } from '../types';
 
 const MAX_INTERVAL_HOURS = 8760; // one year — server-enforced ceiling
-const MAX_TASK_NAME = 200; // server-enforced name limit
-
-/** Dump text → task-name prefill: first line, capped at the server limit. */
-function taskNameFromDumpText(text: string): string {
-  const firstLine = text.split('\n', 1)[0]!.trim();
-  return firstLine.length > MAX_TASK_NAME
-    ? firstLine.slice(0, MAX_TASK_NAME - 1).trimEnd() + '…'
-    : firstLine;
-}
 
 type Mode = 'idle' | 'once' | 'recurring' | 'habit' | 'letgo';
 type IntervalUnit = 'hours' | 'days';
