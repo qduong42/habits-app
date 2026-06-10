@@ -1,29 +1,25 @@
-# Current Progress — habits-app (updated 2026-06-10, v1.1 implemented)
+# Current Progress — habits-app (updated 2026-06-10 18:05)
 
-Dev server may be running locally on :3001 (`SERVE_STATIC=1 PORT=3001 npx tsx server/src/index.ts`, postgres via `docker compose up -d --wait postgres`). Logins: huy/lea, password `changeme123` (SEED_PASSWORD default).
+## Shipped
 
-## v1: DONE — merged to master via PR #1
+- **v1** — merged to `master` via PR #1 (28/28 plan tasks, full overnight AFK loop). Spec/plan/QA under `docs/superpowers/`. Working: auth, habits + Today checklist, XP/levels/streaks/achievements (race-hardened), Dump capture + triage → habits/one-off/recurring tasks (sub-daily reset-on-completion), Stats, settings, PWA, web push nudge, production Docker Compose.
+- **v1.1** — complete on `feat/v1.1-dump-and-today`, **PR #2 OPEN + mergeable** (8 commits, 246 tests green, per-task spec+quality reviews):
+  - Discard with optional answer note (inline input, Enter empty = skip; stored in `discard_note`, shown in History)
+  - Task-first Dump quick action (→ Task instant one-off undated) + braindump History (collapsed date rows, status icons, discard notes, "converted (since deleted)")
+  - Today two-section split (✅ Tasks / 🌱 Habits tinted mega-sections)
+  - Add-button offers tasks/habits only (Dump-a-thought removed per Huy)
+  - History clear: ✕ per item + per-day Clear with confirm
 
-All 28 tasks of `docs/superpowers/plans/2026-06-09-habits-app-v1.md` complete (incl. production compose/README, refactor pass, overnight QA report at `docs/superpowers/ralph/QA-REPORT.md`); merge commit `211f8a1`.
+## Running locally
 
-Working: auth, habits CRUD + Today checklist (category groups), check-in/undo with XP/levels/streaks/achievements (race-hardened with user-row locks), Dump capture + card-by-card triage → one-off/recurring tasks (reset-on-completion, sub-daily OK) or habits, Tasks on Today (+ ⏳ Scheduled toggle), Stats, settings (nudge time/TZ), PWA (installable, injectManifest SW), web push + daily nudge job (needs VAPID keys, see README).
+http://localhost:3001 — **`tsx watch`** (hot-reloads server code; plain tsx was the root cause of the "✕ doesn't remove" bug — stale process missing the new routes). Postgres :5433. Logins huy/lea, `changeme123`. Frontend changes still need `npm run build -w web` (served from static dist).
 
-## v1.1: implemented on `feat/v1.1-dump-and-today` — awaiting PR/merge (Huy's call)
+## Next actions
 
-Plan: `docs/superpowers/plans/2026-06-10-v1.1-dump-and-today.md` (all tasks ticked). Decisions: `new_features.md` (each entry now carries a "Shipped in v1.1" line). The three features:
+1. **Huy: review/merge PR #2** (test plan in the PR description), then optionally delete merged branches.
+2. **Grill session pending:** archived habits are unreachable (no view/unarchive anywhere) — open questions in `new_features.md` 2026-06-10 17:43. Don't implement before grilling.
+3. Polish backlog: `current_issues.md` (minor UX/perf items).
 
-1. **Discard with optional answer note** — `discard_note` column + `POST /inbox/:id/discard {note?}` (≤2000, trimmed, empty → null); inline note input replaces `window.confirm` in both Dump list and TriageCard.
-2. **Dump task-first quick action + braindump History** — → Task (FIRST) converts immediately to a one-off undated task; History section groups all triaged items by dump date (lazy `?all=1` fetch), shows discard notes and "converted (since deleted)".
-3. **Today two-section split** — ✅ Tasks / 🌱 Habits mega-sections with tinted containers; category sub-headers stay inside Habits.
+## Process notes (for fresh sessions)
 
-Mini QA 2026-06-10: curl smoke on a private server against `habits_test` with a throwaway user (discard-with-note visible in `?all=1`; quick convert-task {name only} → oneoff/undated task, item linked; empty-body discard → null note). All rows cleaned up incl. `user_achievements`; `npm run verify` green.
-
-## Backlog
-
-Only the minor polish list in `current_issues.md` (Bright Idea incident resolved; remaining items are small UX/perf polish).
-
-## Process notes
-
-- Permission classifier blocks: pushing to master (use the feature branch; merge decision is Huy's, via superpowers:finishing-a-development-branch), any `.env*` writes (code has dev fallbacks), ralph.sh with --dangerously-skip-permissions (run the loop in-session instead).
-- Plan Rules section (top of plan file) is binding for every worker; review carry-overs get appended to Task 23's text.
-- `current_tasks.md` is the older handoff (pre-implementation) — this file supersedes it.
+Workflow: grill-with-docs → record decisions in new_features.md → plan → subagent-per-task with spec+quality reviews → PR. Classifier blocks: master pushes, `.env*` writes, remote-branch deletion, skip-permissions loops. Never mutate as seeded huy/lea (achievement pollution). CONTEXT.md = domain language; v1 plan Rules 1–11 binding for workers. `current_tasks.md` is an obsolete early handoff.
