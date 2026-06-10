@@ -142,6 +142,29 @@ export interface TaskPatch {
   intervalHours?: number | null;
 }
 
+/** GET /stats — per-habit aggregates (active habits only). */
+export interface StatsHabit {
+  id: string;
+  name: string;
+  /** Category emoji — the contract carries no other category fields. */
+  emoji: string;
+  /** Current streak (daily: days; weekly: target-met weeks). */
+  streak: number;
+  /** Longest streak anywhere in history. */
+  bestStreak: number;
+  /** Completion % 0-100 over the last 28 days (weekly: last 4 ISO weeks). */
+  last28: number;
+}
+
+/** GET /stats. totalCheckins counts habit check-ins only (not tasks). */
+export interface StatsResponse {
+  dayStreak: number;
+  totalCheckins: number;
+  xpTotal: number;
+  level: number;
+  habits: StatsHabit[];
+}
+
 /** Dump item (UI name) — DB/API keep "inbox". */
 export interface InboxItem {
   id: string;

@@ -618,7 +618,7 @@ Definitions: recurring `overdue` = `nextDue <= now` for one-offs `dueDate < toda
 
 **Files:** Modify: `web/src/pages/Stats.tsx`
 
-- [ ] **Step 1: Implement** — top cards: 🔥 day streak, total check-ins, Lv + XP bar; per-habit list: name, current/best streak, thin 28-day completion bar. Verify + commit: `feat(web): stats page`
+- [x] **Step 1: Implement** — top cards: 🔥 day streak, total check-ins, Lv + XP bar; per-habit list: name, current/best streak, thin 28-day completion bar. Verify + commit: `feat(web): stats page`
 
 ### Task 19: Settings (nudge time, timezone)
 

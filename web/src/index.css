@@ -1277,6 +1277,91 @@ body {
   }
 }
 
+/* --- Stats tab (Task 18) ----------------------------------------------------- */
+
+.stats-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 22px;
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  padding: 12px 8px;
+  text-align: center;
+}
+
+.stat-emoji {
+  font-size: 18px;
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* mini XP bar inside the level card — reuses .xp-track/.xp-fill */
+.stat-level-track {
+  width: 100%;
+  height: 6px;
+  margin: 4px 0 2px;
+}
+
+.stats-habit {
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 7px;
+}
+
+.stats-habit-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.stats-habit-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.stats-habit-streaks {
+  flex: none;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* thin 28-day completion bar — neutral purple (contract has no category color) */
+.stats-28-track {
+  height: 5px;
+  border-radius: 3px;
+  background: #ececec;
+  overflow: hidden;
+}
+
+.stats-28-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: #7c4dff;
+  transition: width 0.3s ease;
+}
+
 /* --- Reduced motion --------------------------------------------------------- */
 /* Disable decorative animations. Static confetti would pile up at the top
    edge, so hide it entirely; the toast and celebration card simply appear in
