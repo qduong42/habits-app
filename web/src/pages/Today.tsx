@@ -1,6 +1,7 @@
-// Today checklist — approved hybrid mockup: header + thin XP bar, 📌 Tasks
-// section pinned first (square check boxes, due chips, collapsed ⏳ Scheduled
-// list), habits grouped under light category headers, optimistic checks,
+// Today checklist — approved hybrid mockup, v1.1 two-section split: header +
+// thin XP bar, then two tinted mega-sections — "✅ Tasks" pinned first (square
+// check boxes, due chips, collapsed ⏳ Scheduled list; hidden when empty) and
+// "🌱 Habits" (category sub-groups under light headers). Optimistic checks,
 // floating + opening the capture sheet, ⋯ row menus.
 
 import { useCallback, useEffect, useState } from 'react';
@@ -22,9 +23,6 @@ import {
 } from '../hooks/useHabits';
 import { useCompleteTask, useDeleteTask, useTasks } from '../hooks/useTasks';
 import type { Category, Habit, TaskItem } from '../types';
-
-/** 📌 Tasks header color (approved mockup). */
-const TASKS_COLOR = '#bf360c';
 
 /** XP chip anchored to the tapped habit/task row; `key` re-mounts on re-tap. */
 interface XpToast {
@@ -208,12 +206,10 @@ export default function Today() {
       )}
 
       {allTasks.length > 0 && (
-        <section className="cat-group">
-          <div className="cat-header">
-            <span className="cat-name" style={{ color: TASKS_COLOR }}>
-              📌 Tasks
-            </span>
-            <span className="cat-count">
+        <section className="mega-section mega-tasks">
+          <div className="mega-header">
+            <span className="mega-title">✅ Tasks</span>
+            <span className="mega-count">
               {doneTasks.length}/{visibleTasks.length}
             </span>
           </div>
@@ -241,30 +237,39 @@ export default function Today() {
           <p className="empty-arrow">Tap the + button to add your first habit ↘</p>
         </div>
       ) : (
-        groups.map(({ category, habits }) => {
-          const done = habits.filter((h) => h.doneToday).length;
-          const scheduled = habits.filter((h) => h.scheduledToday).length;
-          return (
-            <section key={category.id} className="cat-group">
-              <div className="cat-header">
-                <span className="cat-name" style={{ color: category.color }}>
-                  {category.emoji} {category.name}
-                </span>
-                <span className="cat-count">
-                  {done}/{scheduled}
-                </span>
-              </div>
-              {habits.map((habit) => (
-                <div key={habit.id} className="habit-row-wrap">
-                  <HabitRow habit={habit} onToggle={handleToggle} onMenu={setMenuHabit} />
-                  {toast?.rowId === habit.id && (
-                    <Toast key={toast.key} text={toast.text} onDone={clearToast} />
-                  )}
+        <section className="mega-section mega-habits">
+          <div className="mega-header">
+            <span className="mega-title">🌱 Habits</span>
+            <span className="mega-count">
+              {data.habits.filter((h) => h.doneToday).length}/
+              {data.habits.filter((h) => h.scheduledToday).length}
+            </span>
+          </div>
+          {groups.map(({ category, habits }) => {
+            const done = habits.filter((h) => h.doneToday).length;
+            const scheduled = habits.filter((h) => h.scheduledToday).length;
+            return (
+              <div key={category.id} className="cat-group">
+                <div className="cat-header">
+                  <span className="cat-name" style={{ color: category.color }}>
+                    {category.emoji} {category.name}
+                  </span>
+                  <span className="cat-count">
+                    {done}/{scheduled}
+                  </span>
                 </div>
-              ))}
-            </section>
-          );
-        })
+                {habits.map((habit) => (
+                  <div key={habit.id} className="habit-row-wrap">
+                    <HabitRow habit={habit} onToggle={handleToggle} onMenu={setMenuHabit} />
+                    {toast?.rowId === habit.id && (
+                      <Toast key={toast.key} text={toast.text} onDone={clearToast} />
+                    )}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </section>
       )}
 
       <button

@@ -1634,3 +1634,62 @@ body {
   font-style: italic;
   color: var(--text-muted);
 }
+
+/* --- Today two-section split (✅ Tasks vs 🌱 Habits) ----------------------- */
+
+/* Tinted mega-section containers — subtle washes so the approved white row
+   cards stay readable inside. Tasks warm (#bf360c), Habits purple (#5e35b1). */
+.mega-section {
+  margin-bottom: 20px;
+  padding: 12px 10px 5px; /* bottom 5px + last row's 7px margin ≈ 12px */
+  border: 1px solid;
+  border-radius: 16px;
+}
+
+.mega-tasks {
+  background: rgba(191, 54, 12, 0.05);
+  border-color: rgba(191, 54, 12, 0.18);
+}
+
+.mega-habits {
+  background: rgba(94, 53, 177, 0.05);
+  border-color: rgba(94, 53, 177, 0.18);
+}
+
+/* Section header — deliberately bigger than the 12px uppercase .cat-header
+   sub-headers that stay inside the Habits section. */
+.mega-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 2px 8px;
+}
+
+.mega-title {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.mega-tasks .mega-title {
+  color: #bf360c;
+}
+
+.mega-habits .mega-title {
+  color: #5e35b1;
+}
+
+.mega-count {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Inner category groups: tighter spacing inside the container. */
+.mega-section .cat-group {
+  margin-bottom: 12px;
+}
+
+.mega-section .cat-group:last-child {
+  margin-bottom: 0;
+}
