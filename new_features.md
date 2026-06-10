@@ -51,3 +51,11 @@ History grows forever; sometimes you want a row (or a whole day) gone for good.
 - UI: a quiet **✕** on each history row (immediate, no confirm — it's history) and a **Clear** button on each date row (`window.confirm("Delete N history items from <label>?")`). The day group disappears on its own once emptied.
 
 **Shipped in v1.1, 2026-06-10** (branch `feat/v1.1-dump-and-today`; post-plan scope, decided here rather than in the v1 plan).
+
+## 2026-06-10 17:43 — Archived habits are unreachable (NOT grilled yet, NOT implemented)
+
+From live usage: archiving a habit removes it from Today (by design) but there is **no view anywhere** to see archived habits — no unarchive, no history of them (their check-in history still counts in Stats totals, but the habit itself is invisible).
+
+**Open questions for the grill session:** where do they live (Profile "Archived" section vs Stats vs a filter on Today)? unarchive action? show their historical streaks? does delete-from-archive need extra friction?
+
+**Implementation notes:** server already has `archivedAt` + the data; needs a `GET /habits?archived=1` (or include-archived flag), an unarchive endpoint (clear `archivedAt`), and a small UI list.
