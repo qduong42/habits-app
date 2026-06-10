@@ -57,3 +57,24 @@ export async function disablePush(): Promise<void> {
   if (subscription) await subscription.unsubscribe();
   await apiFetch('/push/subscribe', { method: 'DELETE' });
 }
+
+/**
+ * Mount-time reconciliation for Profile: the server forgets a subscription
+ * when a push bounces with 410, but this browser may still hold a live one
+ * (e.g. the push service rotated the endpoint behind our back) — re-upload it
+ * so both sides agree before the UI claims notifications are enabled.
+ * Returns whether this browser is subscribed; the upload is best-effort.
+ */
+export async function resyncPush(): Promise<boolean> {
+  const subscription = await currentSubscription();
+  if (subscription === null) return false;
+  try {
+    await apiFetch('/push/subscribe', {
+      method: 'POST',
+      body: JSON.stringify(subscription.toJSON()),
+    });
+  } catch {
+    // Offline or server hiccup — still reflect the browser's state.
+  }
+  return true;
+}

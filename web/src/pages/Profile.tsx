@@ -6,7 +6,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { ApiError, apiFetch } from '../api';
-import { currentSubscription, disablePush, enablePush, pushSupported } from '../push';
+import { disablePush, enablePush, pushSupported, resyncPush } from '../push';
 import { useMe, type Me } from '../useMe';
 import type { Achievement } from '../types';
 
@@ -172,8 +172,11 @@ export default function Profile() {
   useEffect(() => {
     if (!supported) return;
     let cancelled = false;
-    void currentSubscription().then((sub) => {
-      if (!cancelled) setPushOn(sub !== null);
+    // resyncPush re-uploads any live browser subscription so a server record
+    // cleared by a 410 bounce matches the pushManager again before we show
+    // the button as "enabled".
+    void resyncPush().then((on) => {
+      if (!cancelled) setPushOn(on);
     });
     return () => {
       cancelled = true;
@@ -267,6 +270,10 @@ export default function Profile() {
               // A time input emits either '' or a complete HH:MM.
               onBlur={() => {
                 if (time && time !== serverNudgeTime) settings.mutate({ nudgeTime: time });
+              }}
+              onKeyDown={(e) => {
+                // Enter commits the same way leaving the field does.
+                if (e.key === 'Enter') e.currentTarget.blur();
               }}
             />
           </div>
