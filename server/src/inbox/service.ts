@@ -80,7 +80,8 @@ export async function listItems(userId: string, all: boolean): Promise<InboxItem
     .select()
     .from(inboxItems)
     .where(and(...filters))
-    .orderBy(desc(inboxItems.createdAt));
+    // id tiebreaker: same-timestamp captures (burst inserts) keep a stable order.
+    .orderBy(desc(inboxItems.createdAt), desc(inboxItems.id));
   return rows.map(toContract);
 }
 

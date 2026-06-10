@@ -87,3 +87,39 @@ export interface CategoryInput {
   emoji: string;
   color: string;
 }
+
+/** Dump item (UI name) — DB/API keep "inbox". */
+export interface InboxItem {
+  id: string;
+  text: string;
+  sourceUrl: string | null;
+  status: 'open' | 'converted' | 'discarded';
+  habitId: string | null;
+  taskId: string | null;
+  createdAt: string;
+}
+
+/** POST /inbox body. */
+export interface CaptureInput {
+  text: string;
+  sourceUrl?: string;
+}
+
+/**
+ * POST /inbox/:id/convert body — like HabitInput minus sourceUrl (the URL
+ * carries over from the dump item, never from the client).
+ */
+export interface ConvertInput {
+  name: string;
+  categoryId: string;
+  frequencyType: 'daily' | 'weekly';
+  weeklyTarget?: number;
+  notes?: string;
+}
+
+/** POST /inbox/:id/convert response. */
+export interface ConvertResponse {
+  item: InboxItem;
+  habit: Habit;
+  unlockedAchievements: Achievement[];
+}

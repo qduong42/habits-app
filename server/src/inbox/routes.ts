@@ -5,8 +5,8 @@ import { requireAuth, type AuthedRequest } from '../auth/middleware.js';
 import { captureItem, convertItem, discardItem, listItems } from './service.js';
 
 const captureSchema = z.object({
-  text: z.string().trim().min(1),
-  sourceUrl: z.string().optional(),
+  text: z.string().trim().min(1).max(5000),
+  sourceUrl: z.string().max(2000).optional(),
 });
 
 // Same field rules as POST /habits (habits/routes.ts createSchema) minus

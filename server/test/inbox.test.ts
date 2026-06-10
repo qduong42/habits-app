@@ -146,17 +146,28 @@ describe('GET /api/inbox (list)', () => {
     const first = await capture(u.cookie, { text: 'first thought' });
     const second = await capture(u.cookie, { text: 'second thought' });
     const third = await capture(u.cookie, { text: 'third thought' });
+    const fourth = await capture(u.cookie, { text: 'fourth thought' });
     await capture(other.cookie, { text: 'not yours' });
     await discard(u.cookie, second);
+    expect(
+      (
+        await convert(u.cookie, fourth, {
+          name: 'Fourth habit',
+          categoryId: u.categoryId,
+          frequencyType: 'daily',
+        })
+      ).status,
+    ).toBe(200);
 
     const res = await request(app).get('/api/inbox').set('Cookie', u.cookie);
     expect(res.status).toBe(200);
-    // newest first, discarded hidden, foreign items absent
+    // newest first; discarded AND converted hidden by default; foreign items absent
     expect(res.body.map((i: { id: string }) => i.id)).toEqual([third, first]);
 
     const all = await request(app).get('/api/inbox?all=1').set('Cookie', u.cookie);
     expect(all.status).toBe(200);
     expect(all.body.map((i: { id: string; status: string }) => [i.id, i.status])).toEqual([
+      [fourth, 'converted'],
       [third, 'open'],
       [second, 'discarded'],
       [first, 'open'],
@@ -251,6 +262,32 @@ describe('POST /api/inbox/:id/convert', () => {
     });
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('validation');
+  });
+
+  it("foreign user's categoryId → 404 and the item stays open (rollback)", async () => {
+    const u = await makeUser();
+    const other = await makeUser();
+    const itemId = await capture(u.cookie, { text: 'wrong category' });
+
+    const res = await convert(u.cookie, itemId, {
+      name: 'Wrong cat',
+      categoryId: other.categoryId, // not usable by u → createHabit 404s inside the tx
+      frequencyType: 'daily',
+    });
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('not_found');
+
+    // The transaction rolled back: the item is still open and convertible.
+    const list = await request(app).get('/api/inbox').set('Cookie', u.cookie);
+    expect(list.body.map((i: { id: string; status: string }) => [i.id, i.status])).toEqual([
+      [itemId, 'open'],
+    ]);
+    const retry = await convert(u.cookie, itemId, {
+      name: 'Right cat',
+      categoryId: u.categoryId,
+      frequencyType: 'daily',
+    });
+    expect(retry.status).toBe(200);
   });
 
   it("foreign user's item → 404; bogus uuid → 404", async () => {

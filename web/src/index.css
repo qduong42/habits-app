@@ -93,6 +93,35 @@ body {
   line-height: 1;
 }
 
+.tab-badge {
+  position: absolute;
+  top: -4px;
+  right: -12px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--purple);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+.tab-emoji {
+  position: relative;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* --- Pages ------------------------------------------------------------ */
 
 .page-title {
@@ -778,6 +807,193 @@ body {
   background: var(--bg);
 }
 
+/* --- Dump tab: capture box + item list --------------------------------------- */
+
+.capture-box {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  margin-bottom: 16px;
+}
+
+.capture-row {
+  display: flex;
+  gap: 8px;
+}
+
+.capture-input {
+  flex: 1;
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 16px;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.capture-input:focus,
+.capture-url:focus {
+  outline: 2px solid var(--purple);
+  outline-offset: -1px;
+  border-color: var(--purple);
+}
+
+.capture-submit {
+  flex: none;
+  width: 44px;
+  border: none;
+  border-radius: 8px;
+  background: var(--purple);
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.capture-submit:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.capture-link-toggle {
+  border: none;
+  background: none;
+  padding: 6px 2px 0;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.capture-url {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.mini-capture-input {
+  margin-bottom: 12px;
+}
+
+.dump-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dump-item {
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+.dump-item-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.dump-text {
+  flex: 1;
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  min-width: 0;
+}
+
+.dump-age {
+  flex: none;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.dump-item-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.dump-link {
+  margin-right: auto;
+  font-size: 16px;
+  text-decoration: none;
+}
+
+.dump-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.dump-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.dump-btn-habit {
+  border: 1px solid var(--purple);
+  background: #fff;
+  color: var(--purple);
+}
+
+.dump-btn-discard {
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text-muted);
+}
+
+/* --- "Captured 💡" page toast (Today quick capture) --------------------------- */
+
+.captured-toast {
+  position: fixed;
+  bottom: calc(96px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 15;
+  pointer-events: none;
+  background: var(--purple);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 8px 18px;
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(94, 53, 177, 0.35);
+  animation: captured-toast-fade 1.8s ease-out forwards;
+}
+
+@keyframes captured-toast-fade {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+  10% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 /* --- Reduced motion --------------------------------------------------------- */
 /* Disable decorative animations. Static confetti would pile up at the top
    edge, so hide it entirely; the toast and celebration card simply appear in
@@ -788,7 +1004,8 @@ body {
   }
 
   .xp-toast,
-  .celebration-card {
+  .celebration-card,
+  .captured-toast {
     animation: none;
   }
 }

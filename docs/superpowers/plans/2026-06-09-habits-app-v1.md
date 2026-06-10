@@ -518,11 +518,11 @@ test('awards thresholds crossed and skips already-unlocked', () => {
 - Modify: `web/src/pages/Inbox.tsx` (the tab labeled "Dump"), `web/src/pages/Today.tsx`, `web/src/components/HabitForm.tsx`
 - Create: `web/src/components/CaptureSheet.tsx`
 
-- [ ] **Step 1: Capture everywhere** — top of the Dump tab: zero-friction capture box (type → enter → posts `POST /inbox` → input clears, keep typing; optional collapsed URL field). The floating `+` on Today opens a sheet with "💡 Dump a thought" (same capture → `POST /inbox`) / "➕ New habit" (existing form). Dump tab badge shows open count in the tab bar.
+- [x] **Step 1: Capture everywhere** — top of the Dump tab: zero-friction capture box (type → enter → posts `POST /inbox` → input clears, keep typing; optional collapsed URL field). The floating `+` on Today opens a sheet with "💡 Dump a thought" (same capture → `POST /inbox`) / "➕ New habit" (existing form). Dump tab badge shows open count in the tab bar.
 
-- [ ] **Step 2: Dump list** — open items with text, link-out icon when sourceUrl, age ("3d"); per item: **→ Habit** (opens `HabitForm` prefilled, on success shows the achievement celebration if any) and **Discard**. (Card-by-card triage incl. task outcomes lands in Task 27.) Empty state: "Mind full? Dump it here — then schedule it."
+- [x] **Step 2: Dump list** — open items with text, link-out icon when sourceUrl, age ("3d"); per item: **→ Habit** (opens `HabitForm` prefilled, on success shows the achievement celebration if any) and **Discard**. (Card-by-card triage incl. task outcomes lands in Task 27.) Empty state: "Mind full? Dump it here — then schedule it."
 
-- [ ] **Step 3: Verify + manual + commit** — `feat(web): dump tab with quick capture and convert-to-habit`
+- [x] **Step 3: Verify + manual + commit** — `feat(web): dump tab with quick capture and convert-to-habit`
 
 **Slice 3 demo:** paste a Substack takeaway → it becomes a tracked habit.
 

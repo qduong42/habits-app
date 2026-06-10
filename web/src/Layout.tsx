@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
+import { useInbox } from './hooks/useInbox';
 
 const tabs = [
   { to: '/', label: 'Today', emoji: '✅', end: true },
@@ -8,6 +9,11 @@ const tabs = [
 ];
 
 export default function Layout() {
+  // Open dump-item count for the Dump tab badge — shares the ['inbox'] cache
+  // with the Dump page, so captures/converts/discards update it instantly.
+  const inbox = useInbox();
+  const openCount = inbox.data?.length ?? 0;
+
   return (
     <div className="app-shell">
       <main className="content">
@@ -23,8 +29,18 @@ export default function Layout() {
           >
             <span className="tab-emoji" aria-hidden="true">
               {tab.emoji}
+              {tab.to === '/dump' && openCount > 0 && (
+                <span className="tab-badge" aria-hidden="true">
+                  {openCount > 99 ? '99+' : openCount}
+                </span>
+              )}
             </span>
-            <span className="tab-label">{tab.label}</span>
+            <span className="tab-label">
+              {tab.label}
+              {tab.to === '/dump' && openCount > 0 && (
+                <span className="visually-hidden">, {openCount} open items</span>
+              )}
+            </span>
           </NavLink>
         ))}
       </nav>

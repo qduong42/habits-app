@@ -1,6 +1,8 @@
-// Bottom-sheet habit form — create (no `habit` prop) or edit (prefilled).
-// Category select offers an inline "+ New category" mode that POSTs to
-// /categories and selects the result.
+// Bottom-sheet habit form — create (no `habit` prop), edit (prefilled from
+// `habit`), or convert (prefilled from a dump item via `convertItem`; submit
+// hits POST /inbox/:id/convert instead of POST /habits). Category select
+// offers an inline "+ New category" mode that POSTs to /categories and
+// selects the result.
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
@@ -9,28 +11,49 @@ import {
   useCreateHabit,
   useUpdateHabit,
 } from '../hooks/useHabits';
-import type { Habit, HabitInput, HabitPatch } from '../types';
+import { useConvert } from '../hooks/useInbox';
+import type {
+  ConvertInput,
+  ConvertResponse,
+  Habit,
+  HabitInput,
+  HabitPatch,
+  InboxItem,
+} from '../types';
 
 const NEW_CATEGORY = '__new__';
 
+/** Dump text → habit-name prefill: first line, capped at ~60 chars. */
+function nameFromDumpText(text: string): string {
+  const firstLine = text.split('\n', 1)[0]!.trim();
+  return firstLine.length > 60 ? firstLine.slice(0, 59).trimEnd() + '…' : firstLine;
+}
+
 interface HabitFormProps {
   habit?: Habit;
+  /** Convert mode: prefill from this dump item; submit converts it. */
+  convertItem?: InboxItem;
+  /** Called (before onClose) with the server response when a convert succeeds. */
+  onConverted?: (res: ConvertResponse) => void;
   onClose: () => void;
 }
 
-export default function HabitForm({ habit, onClose }: HabitFormProps) {
+export default function HabitForm({ habit, convertItem, onConverted, onClose }: HabitFormProps) {
   const categories = useCategories();
   const createCategory = useCreateCategory();
   const createHabit = useCreateHabit();
   const updateHabit = useUpdateHabit();
+  const convert = useConvert();
 
-  const [name, setName] = useState(habit?.name ?? '');
+  const [name, setName] = useState(
+    habit?.name ?? (convertItem ? nameFromDumpText(convertItem.text) : ''),
+  );
   const [categoryId, setCategoryId] = useState(habit?.category.id ?? '');
   const [frequencyType, setFrequencyType] = useState<'daily' | 'weekly'>(
     habit?.frequencyType ?? 'daily',
   );
   const [weeklyTarget, setWeeklyTarget] = useState(habit?.weeklyTarget ?? 3);
-  const [notes, setNotes] = useState(habit?.notes ?? '');
+  const [notes, setNotes] = useState(habit?.notes ?? convertItem?.text ?? '');
 
   // Focus management: trap entry on mount (unless autoFocus already put focus
   // inside the sheet), restore the previously focused element on unmount.
@@ -64,9 +87,13 @@ export default function HabitForm({ habit, onClose }: HabitFormProps) {
     categoryId !== '' ? categoryId : (categories.data?.[0]?.id ?? '');
   const newCategoryMode = categoryId === NEW_CATEGORY;
 
-  const saving = createHabit.isPending || updateHabit.isPending;
+  const saving = createHabit.isPending || updateHabit.isPending || convert.isPending;
   const error =
-    createHabit.error ?? updateHabit.error ?? createCategory.error ?? categories.error;
+    createHabit.error ??
+    updateHabit.error ??
+    convert.error ??
+    createCategory.error ??
+    categories.error;
 
   async function addCategory() {
     const trimmed = newCatName.trim();
@@ -96,6 +123,18 @@ export default function HabitForm({ habit, onClose }: HabitFormProps) {
         // weekly→daily must omit weeklyTarget (the server clears it).
         if (frequencyType === 'weekly') patch.weeklyTarget = weeklyTarget;
         await updateHabit.mutateAsync({ id: habit.id, patch });
+      } else if (convertItem) {
+        // Convert mode: POST /inbox/:id/convert, not POST /habits — the
+        // server creates the habit AND closes the dump item atomically.
+        const input: ConvertInput = {
+          name: trimmedName,
+          categoryId: effectiveCategoryId,
+          frequencyType,
+        };
+        if (frequencyType === 'weekly') input.weeklyTarget = weeklyTarget;
+        if (notes.trim() !== '') input.notes = notes.trim();
+        const res = await convert.mutateAsync({ itemId: convertItem.id, input });
+        onConverted?.(res);
       } else {
         const input: HabitInput = {
           name: trimmedName,
@@ -120,10 +159,12 @@ export default function HabitForm({ habit, onClose }: HabitFormProps) {
         className="sheet"
         role="dialog"
         aria-modal="true"
-        aria-label={habit ? 'Edit habit' : 'New habit'}
+        aria-label={habit ? 'Edit habit' : convertItem ? 'Turn into habit' : 'New habit'}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="sheet-title">{habit ? 'Edit habit' : 'New habit'}</h2>
+        <h2 className="sheet-title">
+          {habit ? 'Edit habit' : convertItem ? '🌱 Turn into habit' : 'New habit'}
+        </h2>
         <form onSubmit={handleSubmit}>
           <label className="field">
             <span className="field-label">Name</span>

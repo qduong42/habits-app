@@ -2,8 +2,9 @@
 // grouped under light category headers, optimistic check circles, floating +
 // button opening the HabitForm bottom sheet, ⋯ row menu (edit/archive/delete).
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ApiError } from '../api';
+import CaptureSheet from '../components/CaptureSheet';
 import Celebration, { type CelebrationData } from '../components/Celebration';
 import HabitForm from '../components/HabitForm';
 import HabitRow from '../components/HabitRow';
@@ -61,15 +62,24 @@ export default function Today() {
   const deleteHabit = useDeleteHabit();
 
   const [formOpen, setFormOpen] = useState(false);
+  const [captureOpen, setCaptureOpen] = useState(false);
   const [editHabit, setEditHabit] = useState<Habit | null>(null);
   const [menuHabit, setMenuHabit] = useState<Habit | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [toast, setToast] = useState<XpToast | null>(null);
+  const [capturedToast, setCapturedToast] = useState(false);
   const [celebration, setCelebration] = useState<CelebrationData | null>(null);
 
   // Stable callbacks so Toast/Celebration effects don't restart every render.
   const clearToast = useCallback(() => setToast(null), []);
   const closeCelebration = useCallback(() => setCelebration(null), []);
+
+  // "Captured 💡" page toast — auto-clears; you stay on Today.
+  useEffect(() => {
+    if (!capturedToast) return;
+    const timer = setTimeout(() => setCapturedToast(false), 1800);
+    return () => clearTimeout(timer);
+  }, [capturedToast]);
 
   function handleToggle(habit: Habit, done: boolean) {
     setActionError(null);
@@ -165,14 +175,28 @@ export default function Today() {
       <button
         type="button"
         className="fab"
-        aria-label="New habit"
-        onClick={() => {
-          setEditHabit(null);
-          setFormOpen(true);
-        }}
+        aria-label="Add a thought or habit"
+        onClick={() => setCaptureOpen(true)}
       >
         +
       </button>
+
+      {captureOpen && (
+        <CaptureSheet
+          onClose={() => setCaptureOpen(false)}
+          onNewHabit={() => {
+            setEditHabit(null);
+            setFormOpen(true);
+          }}
+          onCaptured={() => setCapturedToast(true)}
+        />
+      )}
+
+      {capturedToast && (
+        <div className="captured-toast" role="status">
+          Captured 💡
+        </div>
+      )}
 
       {formOpen && (
         <HabitForm habit={editHabit ?? undefined} onClose={() => setFormOpen(false)} />
