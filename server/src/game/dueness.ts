@@ -8,6 +8,14 @@ import { localDateFor } from './dates.js';
 
 export type TaskGroup = 'overdue' | 'today' | 'undated' | 'done' | 'hidden';
 
+/**
+ * Contract-facing groups (Task 26 extension): the internal 'hidden' group
+ * splits at the API boundary into excluded history (one-offs completed on a
+ * past day) and 'scheduled' (not yet due — recurring before nextDue,
+ * future-dated one-offs), which GET /tasks?all=1 includes.
+ */
+export type TaskContractGroup = Exclude<TaskGroup, 'hidden'> | 'scheduled';
+
 /** The fields taskGroup needs — a Task row or a plain literal both fit. */
 export interface DuenessTask {
   kind: 'oneoff' | 'recurring';
@@ -75,6 +83,25 @@ export interface DueLabelTask {
   nextDue?: string | Date | null;
 }
 
+/** 'due 20:00'-style time of day in the user's timezone. */
+function hhmm(at: Date, tz: string): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: tz,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(at);
+}
+
+/** 'Jun 13'-style short date in the given timezone. */
+function monthDay(at: Date, tz: string): string {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    month: 'short',
+    day: 'numeric',
+  }).format(at);
+}
+
 /**
  * Human label for a group:
  * - overdue: 'overdue 3h' under 24h late, 'overdue 1d' from 24h on
@@ -82,10 +109,12 @@ export interface DueLabelTask {
  *   dueDate — they're only ever overdue by whole days);
  * - today: recurring → 'due 20:00' (nextDue HH:MM in user TZ),
  *   one-off → 'due today';
+ * - scheduled (not yet due, ?all=1 only): 'due 20:00' when nextDue is still
+ *   today, otherwise 'due Jun 13' (nextDue/dueDate short date);
  * - undated/done/hidden: null.
  */
 export function dueLabel(
-  group: TaskGroup,
+  group: TaskGroup | TaskContractGroup,
   task: DueLabelTask,
   now: Date,
   tz: string,
@@ -107,16 +136,23 @@ export function dueLabel(
     return null;
   }
   if (group === 'today') {
-    if (task.nextDue != null) {
-      const hhmm = new Intl.DateTimeFormat('en-GB', {
-        timeZone: tz,
-        hour: '2-digit',
-        minute: '2-digit',
-        hourCycle: 'h23',
-      }).format(instant(task.nextDue));
-      return `due ${hhmm}`;
-    }
+    if (task.nextDue != null) return `due ${hhmm(instant(task.nextDue), tz)}`;
     return 'due today';
+  }
+  if (group === 'scheduled') {
+    if (task.nextDue != null) {
+      const due = instant(task.nextDue);
+      // Due later today (e.g. a 12h chore knocked out this morning) keeps the
+      // time-of-day form; anything beyond today gets the short date.
+      if (localDateFor(tz, due) === localDateFor(tz, now)) return `due ${hhmm(due, tz)}`;
+      return `due ${monthDay(due, tz)}`;
+    }
+    if (task.dueDate != null) {
+      // dueDate is a plain user-TZ local date — format its parts as UTC so no
+      // timezone math can shift the day.
+      return `due ${monthDay(new Date(`${task.dueDate}T00:00:00Z`), 'UTC')}`;
+    }
+    return null;
   }
   return null;
 }

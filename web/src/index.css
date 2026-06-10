@@ -401,6 +401,78 @@ body {
   cursor: pointer;
 }
 
+/* --- Today: 📌 tasks section --------------------------------------------- */
+
+/* Square check box — distinguishes tasks from the round habit circles. */
+.check-square {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: 2px solid #bbb;
+  background: #fff;
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+}
+
+.check-square-done {
+  background: #4caf50;
+  border-color: #4caf50;
+}
+
+/* Scheduled rows aren't actionable yet — ⏳ placeholder, not a check box. */
+.check-square-scheduled {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: default;
+}
+
+.task-interval {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.due-chip {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.due-chip-overdue {
+  color: #c62828;
+}
+
+.due-chip-today {
+  color: #e65100;
+}
+
+.due-chip-scheduled {
+  color: var(--text-muted);
+}
+
+.scheduled-toggle {
+  display: block;
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 4px 2px;
+  text-align: left;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
 /* --- Today: empty state ------------------------------------------------- */
 
 .empty-state {
@@ -580,6 +652,64 @@ body {
   text-align: center;
   font-size: 17px;
   font-weight: 700;
+}
+
+/* --- Task form: due date + interval picker -------------------------------- */
+
+.due-date-row,
+.interval-row {
+  display: flex;
+  gap: 8px;
+}
+
+.due-date-input,
+.interval-value,
+.interval-unit {
+  padding: 10px 12px;
+  font-size: 16px;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.due-date-input {
+  flex: 1;
+}
+
+.interval-value {
+  flex: 1;
+  min-width: 0;
+}
+
+.interval-unit {
+  flex: none;
+}
+
+.due-date-input:focus,
+.interval-value:focus,
+.interval-unit:focus {
+  outline: 2px solid var(--purple);
+  outline-offset: -1px;
+  border-color: var(--purple);
+}
+
+.due-date-clear {
+  flex: none;
+  padding: 0 14px;
+  font-size: 14px;
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.interval-error {
+  margin: 8px 0 0;
 }
 
 /* --- Action sheet --------------------------------------------------------- */

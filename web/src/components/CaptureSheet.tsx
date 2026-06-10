@@ -1,6 +1,6 @@
 // Quick-capture bottom sheet behind Today's floating "+": "💡 Dump a thought"
-// expands an inline mini-capture (POST /inbox, no navigation) and "➕ New
-// habit" hands off to the existing HabitForm via onNewHabit.
+// expands an inline mini-capture (POST /inbox, no navigation); "➕ New habit"
+// and "✅ New task" hand off to the parent-owned HabitForm/TaskForm.
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useCapture } from '../hooks/useInbox';
@@ -9,11 +9,18 @@ interface CaptureSheetProps {
   onClose: () => void;
   /** Open the HabitForm (the parent owns it); the sheet closes itself first. */
   onNewHabit: () => void;
+  /** Open the TaskForm (the parent owns it); the sheet closes itself first. */
+  onNewTask: () => void;
   /** A thought was captured — parent shows the "Captured 💡" toast. */
   onCaptured: () => void;
 }
 
-export default function CaptureSheet({ onClose, onNewHabit, onCaptured }: CaptureSheetProps) {
+export default function CaptureSheet({
+  onClose,
+  onNewHabit,
+  onNewTask,
+  onCaptured,
+}: CaptureSheetProps) {
   const capture = useCapture();
   const [dumpMode, setDumpMode] = useState(false);
   const [text, setText] = useState('');
@@ -105,6 +112,16 @@ export default function CaptureSheet({ onClose, onNewHabit, onCaptured }: Captur
               }}
             >
               ➕ New habit
+            </button>
+            <button
+              type="button"
+              className="action-btn"
+              onClick={() => {
+                onClose();
+                onNewTask();
+              }}
+            >
+              ✅ New task
             </button>
             <button type="button" className="action-btn" onClick={onClose}>
               Cancel

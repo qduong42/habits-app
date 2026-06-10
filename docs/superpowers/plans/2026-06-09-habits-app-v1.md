@@ -50,14 +50,18 @@
 { id: string, text: string, sourceUrl: string | null, status: 'open'|'converted'|'discarded',
   habitId: string | null, taskId: string | null, createdAt: string }
 
-// TaskItem (GET /tasks item) — server-computed grouping; recurring tasks not yet due are EXCLUDED
+// TaskItem (GET /tasks item) — server-computed grouping; not-yet-due tasks
+// (recurring before nextDue, future-dated one-offs) are EXCLUDED by default and
+// returned as group 'scheduled' by GET /tasks?all=1 (Task 26 contract extension)
 { id: string, name: string, notes: string | null, sourceUrl: string | null,
   kind: 'oneoff' | 'recurring',
-  group: 'overdue' | 'today' | 'undated' | 'done',   // done = completed this local day
-  dueLabel: string | null,   // 'overdue 1d' | 'overdue 3h' | 'due today' | 'due 20:00' | null
+  group: 'overdue' | 'today' | 'undated' | 'done' | 'scheduled',   // done = completed this local day
+  dueLabel: string | null,   // 'overdue 1d' | 'overdue 3h' | 'due today' | 'due 20:00'
+                             // | 'due Jun 13' / 'due 20:00' (scheduled) | null
   dueDate: string | null, intervalHours: number | null, nextDue: string | null }
 
 // GET /tasks → { tasks: TaskItem[] }  (ordered: overdue, today, undated, done)
+// GET /tasks?all=1 → same, plus scheduled tasks appended last (soonest-due first)
 
 // POST /tasks/:id/complete →
 { xpGained: 5, xpTotal: number, level: number, leveledUp: boolean,
@@ -577,11 +581,11 @@ Definitions: recurring `overdue` = `nextDue <= now` for one-offs `dueDate < toda
 - Create: `web/src/components/TaskRow.tsx`, `web/src/components/TaskForm.tsx`, `web/src/hooks/useTasks.ts`
 - Modify: `web/src/pages/Today.tsx`, `web/src/components/CaptureSheet.tsx`
 
-- [ ] **Step 1: Tasks section** — pinned ABOVE habit categories, header `📌 Tasks {done}/{visible}` in `#bf360c`; rows like habit rows but **square** check boxes; right-aligned `dueLabel` (red `#c62828` for overdue, orange `#e65100` for today); done-today tasks struck through at the bottom of the section; section hidden entirely when no tasks. Optimistic complete/undo via `useTasks()` + `useCompleteTask()` (rewards payload feeds the same XP toast/celebration path as check-ins).
+- [x] **Step 1: Tasks section** — pinned ABOVE habit categories, header `📌 Tasks {done}/{visible}` in `#bf360c`; rows like habit rows but **square** check boxes; right-aligned `dueLabel` (red `#c62828` for overdue, orange `#e65100` for today); done-today tasks struck through at the bottom of the section; section hidden entirely when no tasks. Optimistic complete/undo via `useTasks()` + `useCompleteTask()` (rewards payload feeds the same XP toast/celebration path as check-ins).
 
-- [ ] **Step 2: Create/edit** — `TaskForm` bottom sheet: name, mode toggle "once / recurring"; once → optional due date picker; recurring → interval picker (number + unit hours/days, stored as hours, min 1h); notes. Add "✅ New task" to the CaptureSheet on Today. Row ⋯ menu → edit / delete with confirm.
+- [x] **Step 2: Create/edit** — `TaskForm` bottom sheet: name, mode toggle "once / recurring"; once → optional due date picker; recurring → interval picker (number + unit hours/days, stored as hours, min 1h); notes. Add "✅ New task" to the CaptureSheet on Today. Row ⋯ menu → edit / delete with confirm.
 
-- [ ] **Step 3: Verify + manual + commit** — manual: water-plants 120h task, 12h task completing twice. Commit: `feat(web): tasks section on Today with create/edit`
+- [x] **Step 3: Verify + manual + commit** — manual: water-plants 120h task, 12h task completing twice. Commit: `feat(web): tasks section on Today with create/edit`
 
 ### Task 27: Triage flow (card-by-card) + convert-task
 

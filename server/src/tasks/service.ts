@@ -5,7 +5,7 @@ import type { Task } from '../db/schema.js';
 import { localDateFor } from '../game/dates.js';
 import { levelFromXp, TASK_COMPLETION_XP } from '../game/xp.js';
 import { dueLabel, taskGroup } from '../game/dueness.js';
-import type { TaskGroup } from '../game/dueness.js';
+import type { TaskContractGroup } from '../game/dueness.js';
 import { adjustXp, awardAchievements, lockUserRow } from '../game/rewards.js';
 import type { Tx, UnlockedAchievement } from '../game/rewards.js';
 import { HttpError } from '../errors.js';
@@ -15,10 +15,12 @@ const HOUR_MS = 3_600_000;
 const notFound = () => new HttpError(404, 'not_found', 'Task not found');
 
 /**
- * Shared API contract shape (plan: "Shared API contracts"). GET /tasks never
- * emits `group: 'hidden'` (those are excluded); POST/PATCH responses may —
- * e.g. a freshly created recurring task isn't due yet, and a future-dated
- * one-off stays off Today until its due date.
+ * Shared API contract shape (plan: "Shared API contracts", extended in Task
+ * 26): the API never emits the internal `'hidden'` group. Not-yet-due tasks
+ * (freshly created recurring, future-dated one-offs) surface as
+ * `group: 'scheduled'` — excluded from the default GET /tasks, included by
+ * `?all=1`, and always visible on POST/PATCH responses. One-offs completed on
+ * a past day are terminal history and never listed.
  */
 export interface TaskItemContract {
   id: string;
@@ -26,7 +28,7 @@ export interface TaskItemContract {
   notes: string | null;
   sourceUrl: string | null;
   kind: 'oneoff' | 'recurring';
-  group: TaskGroup;
+  group: TaskContractGroup;
   dueLabel: string | null;
   dueDate: string | null;
   intervalHours: number | null;
@@ -78,7 +80,7 @@ function toContract(
   tz: string,
 ): TaskItemContract {
   const kind = kindOf(task);
-  const group = taskGroup(
+  const rawGroup = taskGroup(
     {
       kind,
       dueDate: task.dueDate,
@@ -91,6 +93,11 @@ function toContract(
     today,
     tz,
   );
+  // Internal 'hidden' → contract 'scheduled' (not yet due). The other hidden
+  // case — one-offs completed on a past day — is filtered out by listTasks
+  // before this mapping matters and is unreachable from create/update (both
+  // reject terminally-completed tasks).
+  const group: TaskContractGroup = rawGroup === 'hidden' ? 'scheduled' : rawGroup;
   return {
     id: task.id,
     name: task.name,
@@ -140,12 +147,12 @@ async function latestCompletion(ex: DbOrTx, taskId: string) {
   return row ?? null;
 }
 
-const GROUP_ORDER: Record<TaskGroup, number> = {
+const GROUP_ORDER: Record<TaskContractGroup, number> = {
   overdue: 0,
   today: 1,
   undated: 2,
   done: 3,
-  hidden: 4, // filtered out before sorting; listed for exhaustiveness
+  scheduled: 4, // ?all=1 only — appended after everything actionable/done
 };
 
 /** Due instant for within-group ordering: soonest-due first, then creation. */
@@ -155,7 +162,15 @@ function dueInstantMs(task: Task): number {
   return Number.POSITIVE_INFINITY;
 }
 
-export async function listTasks(userId: string): Promise<TaskItemContract[]> {
+export interface ListTasksOptions {
+  /** Include not-yet-due tasks as group 'scheduled' (GET /tasks?all=1). */
+  all?: boolean;
+}
+
+export async function listTasks(
+  userId: string,
+  { all = false }: ListTasksOptions = {},
+): Promise<TaskItemContract[]> {
   const tz = await userTz(userId);
   const now = new Date();
   const today = localDateFor(tz, now);
@@ -180,7 +195,12 @@ export async function listTasks(userId: string): Promise<TaskItemContract[]> {
       task,
       item: toContract(task, latestLocalDateByTask.get(task.id) ?? null, now, today, tz),
     }))
-    .filter(({ item }) => item.group !== 'hidden')
+    .filter(({ task, item }) => {
+      // One-offs completed on a past day are terminal history — never listed
+      // (toContract would have mislabeled them 'scheduled'; see its comment).
+      if (task.completedAt !== null && item.group !== 'done') return false;
+      return all || item.group !== 'scheduled';
+    })
     .sort((a, b) => {
       const byGroup = GROUP_ORDER[a.item.group] - GROUP_ORDER[b.item.group];
       if (byGroup !== 0) return byGroup;

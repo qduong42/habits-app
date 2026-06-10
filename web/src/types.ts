@@ -88,6 +88,60 @@ export interface CategoryInput {
   color: string;
 }
 
+/**
+ * Task groups — server-computed. 'scheduled' = not yet due (recurring before
+ * nextDue, future-dated one-offs); the default GET /tasks excludes it, GET
+ * /tasks?all=1 appends scheduled tasks last (Task 26 contract extension).
+ */
+export type TaskGroup = 'overdue' | 'today' | 'undated' | 'done' | 'scheduled';
+
+/** GET /tasks item. */
+export interface TaskItem {
+  id: string;
+  name: string;
+  notes: string | null;
+  sourceUrl: string | null;
+  kind: 'oneoff' | 'recurring';
+  group: TaskGroup;
+  /** 'overdue 1d' | 'overdue 3h' | 'due today' | 'due 20:00' | 'due Jun 13' | null */
+  dueLabel: string | null;
+  dueDate: string | null;
+  intervalHours: number | null;
+  nextDue: string | null;
+}
+
+/** GET /tasks(?all=1) → ordered overdue, today, undated, done(, scheduled). */
+export interface TasksResponse {
+  tasks: TaskItem[];
+}
+
+/** POST /tasks/:id/complete. The undo (DELETE) reuses UndoResponse. */
+export interface TaskCompleteResponse {
+  xpGained: number;
+  xpTotal: number;
+  level: number;
+  leveledUp: boolean;
+  /** Recurring only; null for one-offs. */
+  nextDue: string | null;
+  unlockedAchievements: Achievement[];
+}
+
+/** POST /tasks body. dueDate (one-off) XOR intervalHours (recurring, 1-8760). */
+export interface TaskInput {
+  name: string;
+  notes?: string;
+  dueDate?: string;
+  intervalHours?: number;
+}
+
+/** PATCH /tasks/:id body. null clears: dueDate, or intervalHours (→ one-off). */
+export interface TaskPatch {
+  name?: string;
+  notes?: string | null;
+  dueDate?: string | null;
+  intervalHours?: number | null;
+}
+
 /** Dump item (UI name) — DB/API keep "inbox". */
 export interface InboxItem {
   id: string;

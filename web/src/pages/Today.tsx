@@ -1,6 +1,7 @@
-// Today checklist — approved hybrid mockup: header + thin XP bar, habits
-// grouped under light category headers, optimistic check circles, floating +
-// button opening the HabitForm bottom sheet, ⋯ row menu (edit/archive/delete).
+// Today checklist — approved hybrid mockup: header + thin XP bar, 📌 Tasks
+// section pinned first (square check boxes, due chips, collapsed ⏳ Scheduled
+// list), habits grouped under light category headers, optimistic checks,
+// floating + opening the capture sheet, ⋯ row menus.
 
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError } from '../api';
@@ -8,6 +9,8 @@ import CaptureSheet from '../components/CaptureSheet';
 import Celebration, { type CelebrationData } from '../components/Celebration';
 import HabitForm from '../components/HabitForm';
 import HabitRow from '../components/HabitRow';
+import TaskForm from '../components/TaskForm';
+import TaskRow from '../components/TaskRow';
 import Toast from '../components/Toast';
 import XpBar from '../components/XpBar';
 import {
@@ -16,11 +19,15 @@ import {
   useDeleteHabit,
   useHabits,
 } from '../hooks/useHabits';
-import type { Category, Habit } from '../types';
+import { useCompleteTask, useDeleteTask, useTasks } from '../hooks/useTasks';
+import type { Category, Habit, TaskItem } from '../types';
 
-/** XP chip anchored to the tapped row; `key` re-mounts it on rapid re-taps. */
+/** 📌 Tasks header color (approved mockup). */
+const TASKS_COLOR = '#bf360c';
+
+/** XP chip anchored to the tapped habit/task row; `key` re-mounts on re-tap. */
 interface XpToast {
-  habitId: string;
+  rowId: string;
   text: string;
   key: number;
 }
@@ -57,14 +64,21 @@ function groupByCategory(habits: Habit[]): CategoryGroup[] {
 
 export default function Today() {
   const { data, isPending, error } = useHabits();
+  const tasksQuery = useTasks();
   const checkin = useCheckin();
   const archiveHabit = useArchiveHabit();
   const deleteHabit = useDeleteHabit();
+  const completeTask = useCompleteTask();
+  const deleteTask = useDeleteTask();
 
   const [formOpen, setFormOpen] = useState(false);
+  const [taskFormOpen, setTaskFormOpen] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
   const [editHabit, setEditHabit] = useState<Habit | null>(null);
   const [menuHabit, setMenuHabit] = useState<Habit | null>(null);
+  const [editTask, setEditTask] = useState<TaskItem | null>(null);
+  const [menuTask, setMenuTask] = useState<TaskItem | null>(null);
+  const [scheduledOpen, setScheduledOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [toast, setToast] = useState<XpToast | null>(null);
   const [capturedToast, setCapturedToast] = useState(false);
@@ -81,28 +95,55 @@ export default function Today() {
     return () => clearTimeout(timer);
   }, [capturedToast]);
 
+  // Shared rewards feedback for habit check-ins AND task completions: XP chip
+  // near the tapped row, celebration on level-up / achievement unlock.
+  // GameContext (XpBar) is fed by the hooks; undo responses get no feedback.
+  function showRewards(
+    rowId: string,
+    res: {
+      xpGained: number;
+      level: number;
+      leveledUp: boolean;
+      unlockedAchievements: CelebrationData['unlockedAchievements'];
+    },
+  ) {
+    setToast({ rowId, text: `+${res.xpGained} XP`, key: Date.now() });
+    if (res.leveledUp || res.unlockedAchievements.length > 0) {
+      setCelebration({
+        level: res.leveledUp ? res.level : null,
+        unlockedAchievements: res.unlockedAchievements,
+      });
+    }
+  }
+
+  // already_done is success-ish: the row IS checked server-side.
+  function showToggleError(err: Error) {
+    if (err instanceof ApiError && err.code === 'already_done') return;
+    setActionError(err.message);
+  }
+
   function handleToggle(habit: Habit, done: boolean) {
     setActionError(null);
     checkin.mutate(
       { habitId: habit.id, done },
       {
         onSuccess: (res) => {
-          // GameContext (XpBar) is fed by the hook; this handles the rest of
-          // the feedback. Undo responses ('xpLost') get no toast/celebration.
-          if (!('xpGained' in res)) return;
-          setToast({ habitId: habit.id, text: `+${res.xpGained} XP`, key: Date.now() });
-          if (res.leveledUp || res.unlockedAchievements.length > 0) {
-            setCelebration({
-              level: res.leveledUp ? res.level : null,
-              unlockedAchievements: res.unlockedAchievements,
-            });
-          }
+          if ('xpGained' in res) showRewards(habit.id, res);
         },
-        onError: (err) => {
-          // already_done is success-ish: the habit is checked server-side.
-          if (err instanceof ApiError && err.code === 'already_done') return;
-          setActionError(err.message);
+        onError: showToggleError,
+      },
+    );
+  }
+
+  function handleTaskToggle(task: TaskItem, done: boolean) {
+    setActionError(null);
+    completeTask.mutate(
+      { task, done },
+      {
+        onSuccess: (res) => {
+          if ('xpGained' in res) showRewards(task.id, res);
         },
+        onError: showToggleError,
       },
     );
   }
@@ -123,11 +164,33 @@ export default function Today() {
     deleteHabit.mutate(habit.id, { onError: (err) => setActionError(err.message) });
   }
 
+  function handleTaskDelete(task: TaskItem) {
+    setMenuTask(null);
+    if (!window.confirm(`Delete "${task.name}"? This cannot be undone.`)) return;
+    setActionError(null);
+    deleteTask.mutate(task.id, { onError: (err) => setActionError(err.message) });
+  }
+
   if (isPending) return <p className="placeholder">Loading…</p>;
   if (error) return <p className="form-error">Could not load habits: {error.message}</p>;
   if (!data) return null;
 
   const groups = groupByCategory(data.habits);
+
+  // 📌 Tasks: server orders overdue → today → undated → done → scheduled; the
+  // client re-partitions so optimistic group flips move rows immediately.
+  const allTasks = tasksQuery.data?.tasks ?? [];
+  const scheduledTasks = allTasks.filter((t) => t.group === 'scheduled');
+  const visibleTasks = allTasks.filter((t) => t.group !== 'scheduled');
+  const doneTasks = visibleTasks.filter((t) => t.group === 'done');
+  const openTasks = visibleTasks.filter((t) => t.group !== 'done');
+
+  const taskRow = (task: TaskItem) => (
+    <div key={task.id} className="habit-row-wrap">
+      <TaskRow task={task} onToggle={handleTaskToggle} onMenu={setMenuTask} />
+      {toast?.rowId === task.id && <Toast key={toast.key} text={toast.text} onDone={clearToast} />}
+    </div>
+  );
 
   return (
     <div className="today-page">
@@ -139,6 +202,37 @@ export default function Today() {
       <XpBar />
 
       {actionError && <p className="form-error">{actionError}</p>}
+      {tasksQuery.error && (
+        <p className="form-error">Could not load tasks: {tasksQuery.error.message}</p>
+      )}
+
+      {allTasks.length > 0 && (
+        <section className="cat-group">
+          <div className="cat-header">
+            <span className="cat-name" style={{ color: TASKS_COLOR }}>
+              📌 Tasks
+            </span>
+            <span className="cat-count">
+              {doneTasks.length}/{visibleTasks.length}
+            </span>
+          </div>
+          {openTasks.map(taskRow)}
+          {doneTasks.map(taskRow)}
+          {scheduledTasks.length > 0 && (
+            <>
+              <button
+                type="button"
+                className="scheduled-toggle"
+                aria-expanded={scheduledOpen}
+                onClick={() => setScheduledOpen((open) => !open)}
+              >
+                {scheduledOpen ? '▾' : '▸'} ⏳ Scheduled {scheduledTasks.length}
+              </button>
+              {scheduledOpen && scheduledTasks.map(taskRow)}
+            </>
+          )}
+        </section>
+      )}
 
       {data.habits.length === 0 ? (
         <div className="empty-state">
@@ -162,7 +256,7 @@ export default function Today() {
               {habits.map((habit) => (
                 <div key={habit.id} className="habit-row-wrap">
                   <HabitRow habit={habit} onToggle={handleToggle} onMenu={setMenuHabit} />
-                  {toast?.habitId === habit.id && (
+                  {toast?.rowId === habit.id && (
                     <Toast key={toast.key} text={toast.text} onDone={clearToast} />
                   )}
                 </div>
@@ -188,6 +282,10 @@ export default function Today() {
             setEditHabit(null);
             setFormOpen(true);
           }}
+          onNewTask={() => {
+            setEditTask(null);
+            setTaskFormOpen(true);
+          }}
           onCaptured={() => setCapturedToast(true)}
         />
       )}
@@ -200,6 +298,10 @@ export default function Today() {
 
       {formOpen && (
         <HabitForm habit={editHabit ?? undefined} onClose={() => setFormOpen(false)} />
+      )}
+
+      {taskFormOpen && (
+        <TaskForm task={editTask ?? undefined} onClose={() => setTaskFormOpen(false)} />
       )}
 
       {celebration && (
@@ -241,6 +343,40 @@ export default function Today() {
               🗑 Delete
             </button>
             <button type="button" className="action-btn" onClick={() => setMenuHabit(null)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {menuTask && (
+        <div className="sheet-scrim" onClick={() => setMenuTask(null)}>
+          <div
+            className="sheet action-sheet"
+            role="dialog"
+            aria-label={`Options for ${menuTask.name}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="sheet-title">{menuTask.name}</h2>
+            <button
+              type="button"
+              className="action-btn"
+              onClick={() => {
+                setEditTask(menuTask);
+                setMenuTask(null);
+                setTaskFormOpen(true);
+              }}
+            >
+              ✏️ Edit
+            </button>
+            <button
+              type="button"
+              className="action-btn action-btn-danger"
+              onClick={() => handleTaskDelete(menuTask)}
+            >
+              🗑 Delete
+            </button>
+            <button type="button" className="action-btn" onClick={() => setMenuTask(null)}>
               Cancel
             </button>
           </div>

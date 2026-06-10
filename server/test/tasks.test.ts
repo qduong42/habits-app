@@ -163,7 +163,7 @@ describe('POST /api/tasks', () => {
       kind: 'recurring',
       intervalHours: 120,
       dueDate: null,
-      group: 'hidden', // not due yet — GET excludes it (asserted below)
+      group: 'scheduled', // not due yet — default GET excludes it (asserted below)
     });
     const nextDue = Date.parse(res.body.nextDue);
     expect(nextDue).toBeGreaterThanOrEqual(before + 120 * HOUR_MS - 5000);
@@ -241,6 +241,54 @@ describe('GET /api/tasks', () => {
     expect(ids).toContain(undated.id);
     expect(list.find((t) => t.id === overdue.id)!.dueLabel).toBe('overdue 2d');
     expect(list.find((t) => t.id === recurringOverdue.id)!.dueLabel).toBe('overdue 1d');
+  });
+});
+
+describe('GET /api/tasks?all=1 (Task 26: scheduled tasks reachable)', () => {
+  // 'due Jun 13'-style label for a plain local date.
+  const monthDay = (isoDate: string) =>
+    new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }).format(
+      new Date(`${isoDate}T00:00:00Z`),
+    );
+
+  it("appends not-yet-due tasks as group 'scheduled'; terminal one-offs stay excluded", async () => {
+    const u = await makeUser();
+    const open = await createTask(u.cookie, { name: 'Open now' });
+    const futureDate = addDays(todayLocal(), 3);
+    const future = await createTask(u.cookie, { name: 'Future', dueDate: futureDate });
+    const recurringNotDue = await createTask(u.cookie, {
+      name: 'Recurring later',
+      intervalHours: 120,
+    });
+    // terminal: one-off completed on a past day → history, even with ?all=1
+    const oldDone = await createTask(u.cookie, { name: 'Old done' });
+    await complete(u.cookie, oldDone.id);
+    await db
+      .update(tasks)
+      .set({ completedAt: new Date(Date.now() - 48 * HOUR_MS) })
+      .where(eq(tasks.id, oldDone.id));
+
+    // default GET still hides everything scheduled
+    expect((await listTasks(u.cookie)).map((t) => t.id)).toEqual([open.id]);
+
+    const res = await request(app).get('/api/tasks?all=1').set('Cookie', u.cookie);
+    expect(res.status).toBe(200);
+    const all = res.body.tasks as Array<{
+      id: string;
+      name: string;
+      group: string;
+      dueLabel: string | null;
+    }>;
+    // scheduled sorts last, soonest-due first (+3d one-off before +120h recurring)
+    expect(all.map((t) => t.name)).toEqual(['Open now', 'Future', 'Recurring later']);
+    expect(all.find((t) => t.id === future.id)).toMatchObject({
+      group: 'scheduled',
+      dueLabel: `due ${monthDay(futureDate)}`,
+    });
+    const recurring = all.find((t) => t.id === recurringNotDue.id)!;
+    expect(recurring.group).toBe('scheduled');
+    expect(recurring.dueLabel).toMatch(/^due /);
+    expect(all.map((t) => t.id)).not.toContain(oldDone.id);
   });
 });
 

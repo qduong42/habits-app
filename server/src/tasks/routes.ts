@@ -73,7 +73,9 @@ export const tasksRouter = Router();
 tasksRouter.use(requireAuth);
 
 tasksRouter.get('/', async (req, res) => {
-  res.json({ tasks: await listTasks(userIdOf(req)) });
+  // ?all=1 (Task 26): also return not-yet-due tasks as group 'scheduled'.
+  const all = req.query.all === '1';
+  res.json({ tasks: await listTasks(userIdOf(req), { all }) });
 });
 
 tasksRouter.post('/', async (req, res) => {
