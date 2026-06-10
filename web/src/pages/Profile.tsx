@@ -160,8 +160,11 @@ export default function Profile() {
   // --- Push notifications ------------------------------------------------
   // Only offered where the browser supports SW + Push. The VAPID key fetch
   // doubles as the server-side feature flag: a 503 push_disabled means the
-  // server has no VAPID keys, so the button is replaced by a hint.
+  // server has no VAPID keys, so the button is replaced by a hint. Any other
+  // fetch error shows inline with a Retry button. Dev builds never register
+  // the SW, so the button is replaced by a hint up front (no fetch either).
   const supported = pushSupported();
+  const devBuild = import.meta.env.DEV;
   const [pushOn, setPushOn] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
   const [pushError, setPushError] = useState<string | null>(null);
@@ -180,7 +183,7 @@ export default function Profile() {
   const vapid = useQuery({
     queryKey: ['push', 'vapid-key'],
     queryFn: () => apiFetch<{ key: string }>('/push/vapid-public-key'),
-    enabled: supported,
+    enabled: supported && !devBuild,
     retry: false,
     staleTime: Infinity,
   });
@@ -302,20 +305,35 @@ export default function Profile() {
             <span className="settings-label" id="push-label">
               Notifications
             </span>
-            {pushDisabledOnServer ? (
+            {devBuild ? (
+              <span className="settings-hint">Production build only</span>
+            ) : pushDisabledOnServer ? (
               <span className="settings-hint">Not configured on the server</span>
+            ) : vapid.isError ? (
+              <button
+                type="button"
+                className="btn-secondary"
+                aria-labelledby="push-label"
+                disabled={vapid.isFetching}
+                onClick={() => void vapid.refetch()}
+              >
+                {vapid.isFetching ? 'Retrying…' : 'Retry'}
+              </button>
             ) : (
               <button
                 type="button"
                 className="btn-secondary"
                 aria-labelledby="push-label"
-                disabled={pushBusy || vapid.isPending || vapid.isError}
+                disabled={pushBusy || vapid.isPending}
                 onClick={() => void togglePush()}
               >
                 {pushBusy ? 'Working…' : pushOn ? 'Disable notifications' : 'Enable notifications'}
               </button>
             )}
           </div>
+        )}
+        {supported && !devBuild && !pushDisabledOnServer && vapid.isError && (
+          <p className="form-error">Could not load the push key: {vapid.error.message}</p>
         )}
         {pushError && <p className="form-error">{pushError}</p>}
 

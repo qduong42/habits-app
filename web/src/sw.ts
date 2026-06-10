@@ -57,6 +57,10 @@ self.addEventListener('notificationclick', (event) => {
       const existing = windows.find((client) => 'focus' in client);
       if (existing) {
         await existing.focus();
+        // Focus alone leaves the window on whatever tab it was on — also
+        // bring it to the notification's target (Today). navigate() can
+        // reject for uncontrolled clients; the focus already succeeded.
+        await existing.navigate(url).catch(() => undefined);
         return;
       }
       await self.clients.openWindow(url);
