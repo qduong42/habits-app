@@ -2,7 +2,7 @@
 // Category select offers an inline "+ New category" mode that POSTs to
 // /categories and selects the result.
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   useCategories,
   useCreateCategory,
@@ -31,6 +31,19 @@ export default function HabitForm({ habit, onClose }: HabitFormProps) {
   );
   const [weeklyTarget, setWeeklyTarget] = useState(habit?.weeklyTarget ?? 3);
   const [notes, setNotes] = useState(habit?.notes ?? '');
+
+  // Focus management: trap entry on mount (unless autoFocus already put focus
+  // inside the sheet), restore the previously focused element on unmount.
+  const sheetRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const previouslyFocused = document.activeElement;
+    if (!sheetRef.current?.contains(document.activeElement)) {
+      sheetRef.current?.focus();
+    }
+    return () => {
+      if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus();
+    };
+  }, []);
 
   // Escape closes the sheet (carry-over a11y fix from Task 9 review).
   useEffect(() => {
@@ -102,6 +115,8 @@ export default function HabitForm({ habit, onClose }: HabitFormProps) {
   return (
     <div className="sheet-scrim" onClick={onClose}>
       <div
+        ref={sheetRef}
+        tabIndex={-1}
         className="sheet"
         role="dialog"
         aria-modal="true"

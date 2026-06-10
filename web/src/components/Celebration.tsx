@@ -3,7 +3,7 @@
 // Shown when a check-in levels you up and/or unlocks achievements.
 // Auto-dismisses after 2.5s, or tap anywhere to dismiss.
 
-import { useEffect, useMemo, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import type { Achievement } from '../types';
 
 export interface CelebrationData {
@@ -45,10 +45,32 @@ export default function Celebration({ level, unlockedAchievements, onClose }: Ce
     return () => clearTimeout(timer);
   }, [onClose]);
 
+  // Focus management: move focus into the dialog on mount, restore the
+  // previously focused element on unmount.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const previouslyFocused = document.activeElement;
+    dialogRef.current?.focus();
+    return () => {
+      if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus();
+    };
+  }, []);
+
+  // Escape dismisses (same pattern as HabitForm).
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
   const confetti = useMemo(() => makeConfetti(), []);
 
   return (
     <div
+      ref={dialogRef}
+      tabIndex={-1}
       className="celebration-scrim"
       role="dialog"
       aria-modal="true"

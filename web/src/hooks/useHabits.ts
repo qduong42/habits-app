@@ -86,6 +86,11 @@ export function useCheckin() {
     onSuccess: (res, { habitId }) => {
       applyXp(res);
       if ('habitStreak' in res) {
+        // Freshly unlocked badges should show in the Profile gallery without
+        // a manual refresh.
+        if (res.unlockedAchievements.length > 0) {
+          void queryClient.invalidateQueries({ queryKey: ['achievements'] });
+        }
         // Correct the optimistic streak guess with the server's number so the
         // flame is right immediately (the settle-time refetch confirms it).
         queryClient.setQueryData<HabitsResponse>(['habits'], (old) =>
