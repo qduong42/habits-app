@@ -57,6 +57,13 @@
       "when": 1781101113542,
       "tag": "0007_nice_harrier",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1781131168420,
+      "tag": "0008_tired_captain_stacy",
+      "breakpoints": true
     }
   ]
 }

@@ -16,6 +16,8 @@ const notesSchema = z.string().max(5000);
 const dueDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be YYYY-MM-DD');
 // 8760h = one year — anything slower than that isn't a recurring chore.
 const intervalSchema = z.number().min(1).max(8760);
+// One-off only — the service enforces that against the merged state.
+const remindAtSchema = z.iso.datetime();
 
 const MUTUALLY_EXCLUSIVE = 'dueDate and intervalHours are mutually exclusive';
 
@@ -27,6 +29,7 @@ export const createTaskSchema = z
     notes: notesSchema.optional(),
     dueDate: dueDateSchema.optional(), // one-off only
     intervalHours: intervalSchema.optional(), // recurring only
+    remindAt: remindAtSchema.nullable().optional(), // one-off only
   })
   .superRefine((v, ctx) => {
     if (v.dueDate !== undefined && v.intervalHours !== undefined) {
@@ -42,6 +45,7 @@ const patchSchema = z.object({
   notes: notesSchema.nullable().optional(),
   dueDate: dueDateSchema.nullable().optional(),
   intervalHours: intervalSchema.nullable().optional(),
+  remindAt: remindAtSchema.nullable().optional(),
 });
 
 const taskId = (raw: string) => uuidParam(raw, 'Task not found');

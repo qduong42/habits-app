@@ -33,6 +33,8 @@ export interface TaskItemContract {
   dueDate: string | null;
   intervalHours: number | null;
   nextDue: string | null;
+  remindAt: string | null;
+  remindedAt: string | null;
 }
 
 export interface CreateTaskInput {
@@ -40,6 +42,7 @@ export interface CreateTaskInput {
   notes?: string;
   dueDate?: string; // YYYY-MM-DD, one-off only
   intervalHours?: number; // >= 1, recurring only
+  remindAt?: string | null; // ISO timestamp, one-off only (v1.2 reminders)
   /** Internal: carried over from a dump item by convert-task (Task 27) — never client-supplied (the route schemas omit it). */
   sourceUrl?: string;
 }
@@ -49,6 +52,7 @@ export interface UpdateTaskInput {
   notes?: string | null;
   dueDate?: string | null;
   intervalHours?: number | null; // null switches recurring → one-off
+  remindAt?: string | null; // setting/clearing always resets remindedAt
 }
 
 /** POST /tasks/:id/complete contract (plan: "Shared API contracts"). */
@@ -108,7 +112,20 @@ function toContract(
     dueDate: task.dueDate,
     intervalHours: task.intervalHours,
     nextDue: task.nextDue ? task.nextDue.toISOString() : null,
+    remindAt: task.remindAt ? task.remindAt.toISOString() : null,
+    remindedAt: task.remindedAt ? task.remindedAt.toISOString() : null,
   };
+}
+
+/** Reminders are one-off only (spec §2) — recurring tasks self-schedule. */
+function assertRemindAllowed(remindAt: string | null, intervalHours: number | null): void {
+  if (remindAt !== null && intervalHours !== null) {
+    throw new HttpError(
+      400,
+      'remind_one_off_only',
+      'Reminders are only available on one-off tasks — clear remindAt or the interval',
+    );
+  }
 }
 
 async function userTz(userId: string, ex: DbOrTx = db): Promise<string> {
@@ -212,6 +229,7 @@ export async function createTask(
   const tz = await userTz(userId, ex);
   const now = new Date();
   const recurring = input.intervalHours !== undefined;
+  assertRemindAllowed(input.remindAt ?? null, recurring ? input.intervalHours! : null);
   const [created] = await ex
     .insert(tasks)
     .values({
@@ -223,6 +241,7 @@ export async function createTask(
       intervalHours: recurring ? input.intervalHours! : null,
       // recurring: due one interval from creation (spec data model)
       nextDue: recurring ? new Date(now.getTime() + input.intervalHours! * HOUR_MS) : null,
+      remindAt: input.remindAt ? new Date(input.remindAt) : null,
     })
     .returning();
   return toContract(created!, null, now, localDateFor(tz, now), tz);
@@ -251,6 +270,9 @@ export async function updateTask(
       'dueDate and intervalHours are mutually exclusive — clear one of them',
     );
   }
+  const remindAtRaw =
+    patch.remindAt !== undefined ? patch.remindAt : (task.remindAt?.toISOString() ?? null);
+  assertRemindAllowed(remindAtRaw, intervalHours);
 
   let nextDue: Date | null;
   if (intervalHours === null) {
@@ -275,6 +297,10 @@ export async function updateTask(
       dueDate,
       intervalHours,
       nextDue,
+      // Any remindAt change re-arms the reminder: clear the refire guard.
+      ...(patch.remindAt !== undefined
+        ? { remindAt: patch.remindAt ? new Date(patch.remindAt) : null, remindedAt: null }
+        : {}),
     })
     .where(eq(tasks.id, taskId))
     .returning();

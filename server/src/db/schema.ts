@@ -89,6 +89,10 @@ export const tasks = pgTable(
     intervalHours: numeric('interval_hours', { mode: 'number' }), // set = recurring
     nextDue: timestamp('next_due', { withTimezone: true }), // recurring only
     completedAt: timestamp('completed_at', { withTimezone: true }), // one-off terminal
+    remindAt: timestamp('remind_at', { withTimezone: true }), // one-off only, optional
+    // Refire guard: stamped when the reminder push goes out (v1.2 spec §2);
+    // cleared whenever remindAt changes.
+    remindedAt: timestamp('reminded_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('idx_tasks_user_id').on(t.userId)],

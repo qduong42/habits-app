@@ -380,6 +380,8 @@ describe('POST /api/inbox/:id/convert-task (Task 27)', () => {
       dueDate: null,
       intervalHours: null,
       nextDue: null,
+      remindAt: null,
+      remindedAt: null,
     });
     expect(res.body.item).toEqual({
       id: itemId,
