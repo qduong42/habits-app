@@ -5,8 +5,10 @@ import { parseBody, userIdOf, uuidParam } from '../validation.js';
 import { createTaskSchema } from '../tasks/routes.js';
 import {
   captureItem,
+  clearHistory,
   convertItem,
   convertItemToTask,
+  deleteHistoryItem,
   discardItem,
   listItems,
 } from './service.js';
@@ -42,6 +44,10 @@ const discardSchema = z
   .object({ note: z.string().trim().max(2000).optional() })
   .optional();
 
+// History day-group clear (v1.1 follow-up) — the client sends the exact ids
+// of one date group. 500 caps the IN-list; a day can't realistically exceed it.
+const clearSchema = z.object({ ids: z.array(z.uuid()).min(1).max(500) });
+
 const itemId = (raw: string) => uuidParam(raw, 'Inbox item not found');
 
 export const inboxRouter = Router();
@@ -68,6 +74,21 @@ inboxRouter.post('/:id/convert', async (req, res) => {
 inboxRouter.post('/:id/convert-task', async (req, res) => {
   const input = parseBody(createTaskSchema, req.body);
   res.json(await convertItemToTask(userIdOf(req), itemId(req.params.id), input));
+});
+
+// Clear a History day group — deletes the caller's non-open items among ids,
+// ignoring open/foreign/missing ones. Registered before the /:id routes so
+// the literal path can never be shadowed by a param route.
+inboxRouter.post('/history/clear', async (req, res) => {
+  const { ids } = parseBody(clearSchema, req.body);
+  res.json({ deleted: await clearHistory(userIdOf(req), ids) });
+});
+
+// Clear one History item — non-open only (open items go through Discard);
+// open → 409 still_open, foreign/missing → 404.
+inboxRouter.delete('/:id', async (req, res) => {
+  await deleteHistoryItem(userIdOf(req), itemId(req.params.id));
+  res.json({ ok: true });
 });
 
 inboxRouter.post('/:id/discard', async (req, res) => {

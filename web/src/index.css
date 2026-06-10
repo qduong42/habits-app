@@ -1627,6 +1627,46 @@ body {
   color: var(--text-muted);
 }
 
+/* Date row = expand toggle + per-day Clear button side by side. */
+.dump-history-date-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.dump-history-date-row .dump-history-date-toggle {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}
+
+/* Per-day "Clear" — destructive accent, confirmed via window.confirm. */
+.dump-history-clear {
+  flex: none;
+  padding: 0 12px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #c62828;
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+/* Per-item ✕ — quiet hard delete of one history row (no confirm). */
+.dump-history-delete {
+  flex: none;
+  padding: 0 4px;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: inherit;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
 /* discardNote shown underneath the discarded item it answers. */
 .dump-history-note {
   margin: 2px 0 0 44px; /* clears the HH:MM column */

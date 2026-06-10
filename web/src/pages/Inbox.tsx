@@ -18,7 +18,15 @@ import Celebration, { type CelebrationData } from '../components/Celebration';
 import HabitForm from '../components/HabitForm';
 import TriageCard from '../components/TriageCard';
 import { formatAge, formatDumpDate, formatTime, localDateKey, taskNameFromDumpText } from '../format';
-import { useCapture, useConvertTask, useDiscard, useInbox, useInboxAll } from '../hooks/useInbox';
+import {
+  useCapture,
+  useClearHistory,
+  useConvertTask,
+  useDeleteHistoryItem,
+  useDiscard,
+  useInbox,
+  useInboxAll,
+} from '../hooks/useInbox';
 import type { Achievement, ConvertResponse, InboxItem } from '../types';
 
 /** History status label: 🗑 / ✅ / 🌱; converted with both links null = deleted. */
@@ -34,6 +42,8 @@ export default function Inbox() {
   const capture = useCapture();
   const convertTask = useConvertTask();
   const discard = useDiscard();
+  const deleteHistoryItem = useDeleteHistoryItem();
+  const clearHistory = useClearHistory();
 
   const [text, setText] = useState('');
   const [linkOpen, setLinkOpen] = useState(false);
@@ -166,6 +176,28 @@ export default function Inbox() {
       else next.add(key);
       return next;
     });
+  }
+
+  /** ✕ on a history row — immediate hard delete, no confirm (it's history). */
+  function deleteHistory(item: InboxItem) {
+    if (deleteHistoryItem.isPending) return;
+    setActionError(null);
+    deleteHistoryItem.mutate(item.id, { onError: (err) => setActionError(err.message) });
+  }
+
+  /** "Clear" on a date row — confirm, then send that group's exact ids (the
+   * server ignores any that turned open/foreign/missing in the meantime).
+   * The group row disappears on its own once the refetch returns it empty. */
+  function clearDay(group: InboxItem[]) {
+    if (clearHistory.isPending) return;
+    const label = formatDumpDate(group[0]!.createdAt);
+    const noun = group.length === 1 ? 'history item' : 'history items';
+    if (!window.confirm(`Delete ${group.length} ${noun} from ${label}?`)) return;
+    setActionError(null);
+    clearHistory.mutate(
+      group.map((item) => item.id),
+      { onError: (err) => setActionError(err.message) },
+    );
   }
 
   function handleDiscardKeyDown(e: KeyboardEvent<HTMLInputElement>, item: InboxItem) {
@@ -329,15 +361,26 @@ export default function Inbox() {
             <ul className="dump-history-dates">
               {historyGroups.map(([key, group]) => (
                 <li key={key} className="dump-history-date">
-                  <button
-                    type="button"
-                    className="dump-history-date-toggle"
-                    aria-expanded={openDates.has(key)}
-                    onClick={() => toggleDate(key)}
-                  >
-                    {formatDumpDate(group[0]!.createdAt)} · {group.length} item
-                    {group.length === 1 ? '' : 's'}
-                  </button>
+                  <div className="dump-history-date-row">
+                    <button
+                      type="button"
+                      className="dump-history-date-toggle"
+                      aria-expanded={openDates.has(key)}
+                      onClick={() => toggleDate(key)}
+                    >
+                      {formatDumpDate(group[0]!.createdAt)} · {group.length} item
+                      {group.length === 1 ? '' : 's'}
+                    </button>
+                    <button
+                      type="button"
+                      className="dump-history-clear"
+                      aria-label={`Clear all history from ${formatDumpDate(group[0]!.createdAt)}`}
+                      onClick={() => clearDay(group)}
+                      disabled={clearHistory.isPending}
+                    >
+                      Clear
+                    </button>
+                  </div>
                   {openDates.has(key) && (
                     <ul className="dump-history-items">
                       {group.map((item) => (
@@ -346,6 +389,15 @@ export default function Inbox() {
                             <span className="dump-history-time">{formatTime(item.createdAt)}</span>
                             <p className="dump-history-text">{item.text}</p>
                             <span className="dump-history-status">{historyStatusLabel(item)}</span>
+                            <button
+                              type="button"
+                              className="dump-history-delete"
+                              aria-label="Delete this history item"
+                              onClick={() => deleteHistory(item)}
+                              disabled={deleteHistoryItem.isPending}
+                            >
+                              ✕
+                            </button>
                           </div>
                           {item.discardNote !== null && (
                             <p className="dump-history-note">{item.discardNote}</p>

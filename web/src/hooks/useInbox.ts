@@ -81,6 +81,31 @@ export function useConvertTask() {
   });
 }
 
+/** Clear one History item (non-open) — hard delete, never touches a created
+ * habit/task. Invalidating ['inbox'] refreshes the History (['inbox','all']). */
+export function useDeleteHistoryItem() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (itemId: string) =>
+      apiFetch<{ ok: true }>(`/inbox/${itemId}`, { method: 'DELETE' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['inbox'] }),
+  });
+}
+
+/** Clear a History day group — sends the group's exact item ids (TZ-proof);
+ * the server deletes the caller's non-open ones and ignores the rest. */
+export function useClearHistory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) =>
+      apiFetch<{ deleted: number }>('/inbox/history/clear', {
+        method: 'POST',
+        body: JSON.stringify({ ids }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['inbox'] }),
+  });
+}
+
 /** Discard with an optional answer note — empty/absent note stores null. */
 export function useDiscard() {
   const queryClient = useQueryClient();

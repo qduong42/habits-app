@@ -39,3 +39,15 @@ Sometimes a dumped question gets answered at triage time ("sasi teeth is ok?" �
 **Implementation notes:** extend `POST /inbox/:id/discard` body `{note?}` (zod, cap ~2000); inline input replacing the current `window.confirm` (the prompt itself becomes the confirm — Enter discards, Escape cancels); InboxItem contract gains `discardNote: string | null`.
 
 **Shipped in v1.1, 2026-06-10** (branch `feat/v1.1-dump-and-today`; `discard_note` migration, note ≤2000 trimmed, empty → null).
+
+## 2026-06-10 17:40 — Dump: clear braindump History (per item and per day)
+
+History grows forever; sometimes you want a row (or a whole day) gone for good.
+
+**Decisions:**
+- **Hard delete** of history (non-open) inbox items — no soft-delete/undo. Deleting never touches the created habit/task (the FK points inbox→habit/task; it's just a row delete).
+- `DELETE /inbox/:id` — non-open items only; an **open** item → **409 `still_open`** (open dump items must use Discard); foreign/missing/bogus → 404; success → `{ok:true}`.
+- `POST /inbox/history/clear` body `{ids: uuid[] min 1 max 500}` — deletes the caller's non-open items among ids, silently ignores open/foreign/missing ones → `{deleted: n}`. The client sends the **exact ids of a day group** — TZ-proof, no server-side date math.
+- UI: a quiet **✕** on each history row (immediate, no confirm — it's history) and a **Clear** button on each date row (`window.confirm("Delete N history items from <label>?")`). The day group disappears on its own once emptied.
+
+**Shipped in v1.1, 2026-06-10** (branch `feat/v1.1-dump-and-today`; post-plan scope, decided here rather than in the v1 plan).
