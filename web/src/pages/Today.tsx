@@ -251,9 +251,13 @@ export default function Today() {
         <section className="mega-section mega-tasks">
           <div className="mega-header">
             <span className="mega-title">✅ Tasks</span>
-            <span className="mega-count">
-              {doneTasks.length}/{visibleTasks.length}
-            </span>
+            {/* Only scheduled tasks → "0/0" reads broken; the count ignores
+                not-yet-due tasks, so hide it until something is actionable. */}
+            {visibleTasks.length > 0 && (
+              <span className="mega-count">
+                {doneTasks.length}/{visibleTasks.length}
+              </span>
+            )}
           </div>
           {openTasks.map(taskRow)}
           {doneTasks.map(taskRow)}

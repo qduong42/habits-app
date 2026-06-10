@@ -38,6 +38,15 @@ export function addDays(date: string, n: number): string {
   return toDateString(new Date(Date.UTC(y, m - 1, d + n)));
 }
 
+/** Monday (YYYY-MM-DD) of the ISO week containing `date`. */
+export function startOfIsoWeek(date: string): string {
+  const [y, m, d] = partsOf(date);
+  const monday = new Date(Date.UTC(y, m - 1, d));
+  const dow = (monday.getUTCDay() + 6) % 7; // Mon=0 ... Sun=6
+  monday.setUTCDate(monday.getUTCDate() - dow);
+  return toDateString(monday);
+}
+
 /** ISO 8601 week of a YYYY-MM-DD date, as 'YYYY-Www' (Thursday algorithm). */
 export function isoWeekOf(date: string): string {
   const [y, m, d] = partsOf(date);

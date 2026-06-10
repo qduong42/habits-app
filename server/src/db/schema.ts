@@ -65,7 +65,11 @@ export const checkins = pgTable(
     localDate: date('local_date').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [unique('uniq_checkin_per_day').on(t.habitId, t.localDate)],
+  (t) => [
+    unique('uniq_checkin_per_day').on(t.habitId, t.localDate),
+    // per-user date-bounded scans (push/nudge.ts currentWeekCheckins)
+    index('idx_checkins_user_date').on(t.userId, t.localDate),
+  ],
 );
 
 export type Checkin = typeof checkins.$inferSelect;
