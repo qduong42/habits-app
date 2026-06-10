@@ -13,6 +13,7 @@ import { eq, isNotNull } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { users } from '../db/schema.js';
 import { sendNudge } from './nudge.js';
+import { sendDueReminders } from './reminders.js';
 
 /** Live jobs keyed by userId — exported so tests can observe side effects. */
 export const nudgeJobs = new Map<string, schedule.Job>();
@@ -91,4 +92,35 @@ export async function scheduleAllNudges(): Promise<void> {
 export function cancelAllNudges(): void {
   for (const job of nudgeJobs.values()) job.cancel();
   nudgeJobs.clear();
+}
+
+let reminderScanJob: schedule.Job | null = null;
+
+/** The live per-minute reminder scan job, or null — exported for tests. */
+export function reminderJob(): schedule.Job | null {
+  return reminderScanJob;
+}
+
+/**
+ * Per-minute task-reminder scan (v1.2 spec §2), one global job — unlike
+ * nudges it is not per-user; sendDueReminders scans every due task at once.
+ * Registered once at boot (index.ts).
+ */
+export function scheduleReminderScan(): void {
+  cancelReminderScan();
+  reminderScanJob = schedule.scheduleJob('reminders', '* * * * *', () => {
+    // Transient push/DB failures must not kill the process; the scan fires
+    // again next minute (due reminders stay unstamped until processed).
+    sendDueReminders(new Date()).catch((err) => {
+      console.error('[push] reminder scan failed', err);
+    });
+  });
+}
+
+/** Cancel the scan job — test teardown (open timers keep the worker alive). */
+export function cancelReminderScan(): void {
+  if (reminderScanJob) {
+    reminderScanJob.cancel();
+    reminderScanJob = null;
+  }
 }

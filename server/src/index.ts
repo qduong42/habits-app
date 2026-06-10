@@ -1,5 +1,5 @@
 import { createApp } from './app.js';
-import { scheduleAllNudges } from './push/scheduler.js';
+import { scheduleAllNudges, scheduleReminderScan } from './push/scheduler.js';
 
 const PORT = Number(process.env.PORT ?? 3001);
 
@@ -13,3 +13,7 @@ createApp().listen(PORT, () => {
 scheduleAllNudges().catch((err) => {
   console.error('[push] scheduling nudges on boot failed', err);
 });
+
+// Per-minute task-reminder scan (v1.2 spec §2). Same Rule-10 stance: runs
+// regardless of VAPID configuration; sendDueReminders warns and stamps.
+scheduleReminderScan();
