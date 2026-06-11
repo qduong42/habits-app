@@ -1,10 +1,12 @@
 // One task row in the 📌 Tasks section: SQUARE check box (vs the round habit
-// circle), name, recurring 🔁 interval hint, right-aligned due chip (red when
+// circle), name, recurring 🔁 interval hint or pending-reminder 🔔 badge
+// (one-off only — the two never co-occur), right-aligned due chip (red when
 // overdue, orange when due today), ⋯ menu. Done rows render struck through;
 // tapping the checked square undoes (same-day only, server-enforced).
 // Scheduled rows (collapsed "⏳ Scheduled" list) have no check box — they are
 // not actionable yet, only editable.
 
+import { formatDumpDate } from '../format';
 import type { TaskGroup, TaskItem } from '../types';
 
 /** "every 12h" / "every 5d" — whole days collapse to the day form. */
@@ -53,6 +55,11 @@ export default function TaskRow({ task, onToggle, onMenu }: TaskRowProps) {
         {task.kind === 'recurring' && task.intervalHours !== null && (
           <div className="task-interval">🔁 {intervalHint(task.intervalHours)}</div>
         )}
+        {task.remindAt !== null &&
+          task.remindedAt === null &&
+          new Date(task.remindAt).getTime() > Date.now() && (
+            <div className="task-interval">🔔 {formatDumpDate(task.remindAt)}</div>
+          )}
       </div>
       {task.dueLabel !== null && (
         <span className={DUE_CHIP_CLASS[task.group] ?? 'due-chip'}>{task.dueLabel}</span>

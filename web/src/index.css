@@ -676,6 +676,8 @@ body {
 
 .due-date-input {
   flex: 1;
+  /* Two inputs share the reminder row (date + time) — let them shrink. */
+  min-width: 0;
 }
 
 .interval-value {
@@ -1673,6 +1675,85 @@ body {
   font-size: 13px;
   font-style: italic;
   color: var(--text-muted);
+}
+
+/* --- Done History (collapsed date rows at the bottom of Today, v1.2) -------- */
+/* Mirrors the Braindump History look; rows are read-only so there are no
+   clear/delete styles. */
+
+.done-history {
+  margin-top: 24px;
+}
+
+.done-history-toggle {
+  display: block;
+  width: 100%;
+  padding: 8px 0;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: left;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-top: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.done-history-toggle::before {
+  content: '▸ ';
+}
+
+.done-history-toggle[aria-expanded='true']::before {
+  content: '▾ ';
+}
+
+.done-history-dates {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.done-history-date {
+  margin-bottom: 8px;
+}
+
+.done-history-date-toggle {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  color: var(--text);
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.done-history-items {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.done-history-item {
+  padding: 8px 12px;
+  font-size: 14px;
+  overflow-wrap: break-word;
+  border-bottom: 1px solid var(--border);
+}
+
+.done-history-item:last-child {
+  border-bottom: none;
+}
+
+.done-history-time {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 /* --- Today two-section split (✅ Tasks vs 🌱 Habits) ----------------------- */

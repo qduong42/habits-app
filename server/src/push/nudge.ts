@@ -4,14 +4,31 @@
  * any and the user has a push subscription.
  */
 
-import { eq } from 'drizzle-orm';
+import { and, eq, gte, isNull } from 'drizzle-orm';
 import { db } from '../db/client.js';
-import { tasks, users } from '../db/schema.js';
+import { checkins, habits, tasks, users } from '../db/schema.js';
 import type { User } from '../db/schema.js';
-import { localDateFor } from '../game/dates.js';
+import { localDateFor, startOfIsoWeek } from '../game/dates.js';
 import { taskGroup } from '../game/dueness.js';
-import { loadRewardState, openScheduledCount } from '../habits/service.js';
+import { openScheduledCount } from '../habits/service.js';
 import { configuredWebpush, pushEnabled } from './vapid.js';
+
+/**
+ * Check-ins that can influence today's open count — bounded to the current
+ * ISO week instead of the full history (current_issues 2026-06-10 item 5).
+ * openScheduledCount only consults done-today and current-week counts, so
+ * rows before Monday can never change the result. Lower bound only: a
+ * same-week localDate after `today` cannot exist (stamped at check-in time).
+ */
+export async function currentWeekCheckins(
+  userId: string,
+  today: string,
+): Promise<{ habitId: string; localDate: string }[]> {
+  return db
+    .select({ habitId: checkins.habitId, localDate: checkins.localDate })
+    .from(checkins)
+    .where(and(eq(checkins.userId, userId), gte(checkins.localDate, startOfIsoWeek(today))));
+}
 
 /**
  * Scheduled-but-not-done active habits today — the EXACT day-bonus semantics
@@ -19,7 +36,20 @@ import { configuredWebpush, pushEnabled } from './vapid.js';
  * done today; weekly habits count while under target and not done today.
  */
 export async function openHabitsCount(userId: string, today: string): Promise<number> {
-  const { activeHabits, datesByHabit } = await loadRewardState(db, userId);
+  const activeHabits = await db
+    .select({
+      id: habits.id,
+      frequencyType: habits.frequencyType,
+      weeklyTarget: habits.weeklyTarget,
+    })
+    .from(habits)
+    .where(and(eq(habits.userId, userId), isNull(habits.archivedAt)));
+  const datesByHabit = new Map<string, Set<string>>();
+  for (const c of await currentWeekCheckins(userId, today)) {
+    let set = datesByHabit.get(c.habitId);
+    if (!set) datesByHabit.set(c.habitId, (set = new Set()));
+    set.add(c.localDate);
+  }
   return openScheduledCount(activeHabits, datesByHabit, today);
 }
 

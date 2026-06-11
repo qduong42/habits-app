@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/client.js';
@@ -64,4 +65,29 @@ settingsRouter.put('/settings', async (req, res) => {
     nudgeTime: normalizeNudgeTime(updated.nudgeTime),
     timezone: updated.timezone,
   });
+});
+
+const passwordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8),
+});
+
+// POST /api/me/password — change the password. Existing JWTs stay valid
+// (accepted for tailnet-only v1).
+settingsRouter.post('/password', async (req, res) => {
+  const { currentPassword, newPassword } = parseBody(passwordSchema, req.body);
+  const userId = userIdOf(req);
+
+  const [user] = await db.select().from(users).where(eq(users.id, userId));
+  if (!user) {
+    throw new HttpError(401, 'unauthenticated', 'Invalid session');
+  }
+  if (!(await bcrypt.compare(currentPassword, user.passwordHash))) {
+    throw new HttpError(401, 'wrong_password', 'Current password is wrong');
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+  await db.update(users).set({ passwordHash }).where(eq(users.id, userId));
+
+  res.json({ ok: true });
 });

@@ -1,0 +1,1 @@
+CREATE INDEX "idx_checkins_user_date" ON "checkins" USING btree ("user_id","local_date");

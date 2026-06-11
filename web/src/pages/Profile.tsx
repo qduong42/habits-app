@@ -2,11 +2,11 @@
 // (full catalog; locked badges grayed with 🔒 and their description still
 // visible so they read as goals), and logout.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { ApiError, apiFetch } from '../api';
-import { currentSubscription, disablePush, enablePush, pushSupported } from '../push';
+import { disablePush, enablePush, pushSupported, resyncPush } from '../push';
 import { useMe, type Me } from '../useMe';
 import type { Achievement } from '../types';
 
@@ -37,6 +37,74 @@ const OTHER_ZONES = ALL_ZONES.filter((z) => !COMMON_ZONES.includes(z));
 interface SettingsBody {
   nudgeTime?: string | null;
   timezone?: string;
+}
+
+function ChangePasswordSection() {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [changed, setChanged] = useState(false);
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    setChanged(false);
+    try {
+      await apiFetch('/me/password', {
+        method: 'POST',
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      setCurrentPassword('');
+      setNewPassword('');
+      setChanged(true);
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'wrong_password') {
+        setError('Current password is wrong');
+      } else {
+        setError(err instanceof Error ? err.message : 'Could not change the password');
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <h2 className="section-title">Change password</h2>
+      <div className="settings-card">
+        <form onSubmit={onSubmit}>
+          <label className="field">
+            <span className="field-label">Current password</span>
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              autoComplete="current-password"
+              required
+            />
+          </label>
+          <label className="field">
+            <span className="field-label">New password (min 8 characters)</span>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              autoComplete="new-password"
+              minLength={8}
+              required
+            />
+          </label>
+          {error && <p className="form-error">{error}</p>}
+          {changed && <p className="settings-hint">Password changed</p>}
+          <button type="submit" className="btn-secondary" disabled={busy}>
+            {busy ? 'Saving…' : 'Save'}
+          </button>
+        </form>
+      </div>
+    </>
+  );
 }
 
 export default function Profile() {
@@ -92,8 +160,11 @@ export default function Profile() {
   // --- Push notifications ------------------------------------------------
   // Only offered where the browser supports SW + Push. The VAPID key fetch
   // doubles as the server-side feature flag: a 503 push_disabled means the
-  // server has no VAPID keys, so the button is replaced by a hint.
+  // server has no VAPID keys, so the button is replaced by a hint. Any other
+  // fetch error shows inline with a Retry button. Dev builds never register
+  // the SW, so the button is replaced by a hint up front (no fetch either).
   const supported = pushSupported();
+  const devBuild = import.meta.env.DEV;
   const [pushOn, setPushOn] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
   const [pushError, setPushError] = useState<string | null>(null);
@@ -101,8 +172,11 @@ export default function Profile() {
   useEffect(() => {
     if (!supported) return;
     let cancelled = false;
-    void currentSubscription().then((sub) => {
-      if (!cancelled) setPushOn(sub !== null);
+    // resyncPush re-uploads any live browser subscription so a server record
+    // cleared by a 410 bounce matches the pushManager again before we show
+    // the button as "enabled".
+    void resyncPush().then((on) => {
+      if (!cancelled) setPushOn(on);
     });
     return () => {
       cancelled = true;
@@ -112,7 +186,7 @@ export default function Profile() {
   const vapid = useQuery({
     queryKey: ['push', 'vapid-key'],
     queryFn: () => apiFetch<{ key: string }>('/push/vapid-public-key'),
-    enabled: supported,
+    enabled: supported && !devBuild,
     retry: false,
     staleTime: Infinity,
   });
@@ -197,6 +271,10 @@ export default function Profile() {
               onBlur={() => {
                 if (time && time !== serverNudgeTime) settings.mutate({ nudgeTime: time });
               }}
+              onKeyDown={(e) => {
+                // Enter commits the same way leaving the field does.
+                if (e.key === 'Enter') e.currentTarget.blur();
+              }}
             />
           </div>
         )}
@@ -234,14 +312,26 @@ export default function Profile() {
             <span className="settings-label" id="push-label">
               Notifications
             </span>
-            {pushDisabledOnServer ? (
+            {devBuild ? (
+              <span className="settings-hint">Production build only</span>
+            ) : pushDisabledOnServer ? (
               <span className="settings-hint">Not configured on the server</span>
+            ) : vapid.isError ? (
+              <button
+                type="button"
+                className="btn-secondary"
+                aria-labelledby="push-label"
+                disabled={vapid.isFetching}
+                onClick={() => void vapid.refetch()}
+              >
+                {vapid.isFetching ? 'Retrying…' : 'Retry'}
+              </button>
             ) : (
               <button
                 type="button"
                 className="btn-secondary"
                 aria-labelledby="push-label"
-                disabled={pushBusy || vapid.isPending || vapid.isError}
+                disabled={pushBusy || vapid.isPending}
                 onClick={() => void togglePush()}
               >
                 {pushBusy ? 'Working…' : pushOn ? 'Disable notifications' : 'Enable notifications'}
@@ -249,12 +339,17 @@ export default function Profile() {
             )}
           </div>
         )}
+        {supported && !devBuild && !pushDisabledOnServer && vapid.isError && (
+          <p className="form-error">Could not load the push key: {vapid.error.message}</p>
+        )}
         {pushError && <p className="form-error">{pushError}</p>}
 
         {settings.error && (
           <p className="form-error">Could not save settings: {settings.error.message}</p>
         )}
       </div>
+
+      <ChangePasswordSection />
 
       <h2 className="section-title">
         Achievements

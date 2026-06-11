@@ -4,9 +4,10 @@ import bcrypt from 'bcryptjs';
 import { eq, inArray, isNull, like } from 'drizzle-orm';
 import { db } from '../src/db/client.js';
 import { categories, checkins, habits, tasks, users } from '../src/db/schema.js';
-import { addDays, localDateFor } from '../src/game/dates.js';
+import { addDays, localDateFor, startOfIsoWeek } from '../src/game/dates.js';
 import { createApp } from '../src/app.js';
 import {
+  currentWeekCheckins,
   openHabitsCount,
   dueTasksCount,
   nudgeTitle,
@@ -152,6 +153,47 @@ describe('openHabitsCount', () => {
     const today = localDateFor('UTC');
     await addHabit(user.id, 'daily', null, true);
     expect(await openHabitsCount(user.id, today)).toBe(0);
+  });
+
+  // current_issues 2026-06-10 item 5: nudge counting must not load the full
+  // check-in history per fire — only the current ISO week can affect counts.
+  it('currentWeekCheckins loads only this ISO week, scoped to the user', async () => {
+    const user = await makeUser();
+    const other = await makeUser();
+    const today = localDateFor('UTC');
+    const weekStart = startOfIsoWeek(today);
+
+    const habit = await addHabit(user.id, 'daily');
+    const otherHabit = await addHabit(other.id, 'daily');
+    await db.insert(checkins).values([
+      { habitId: habit.id, userId: user.id, localDate: weekStart }, // in week
+      { habitId: habit.id, userId: user.id, localDate: addDays(weekStart, -1) }, // last week
+      { habitId: habit.id, userId: user.id, localDate: addDays(weekStart, -30) }, // old history
+      { habitId: otherHabit.id, userId: other.id, localDate: weekStart }, // other user
+    ]);
+
+    const rows = await currentWeekCheckins(user.id, today);
+    expect(rows).toEqual([{ habitId: habit.id, localDate: weekStart }]);
+  });
+
+  it('past-week history still informs counts correctly despite the bound', async () => {
+    const user = await makeUser();
+    const today = localDateFor('UTC');
+    const weekStart = startOfIsoWeek(today);
+
+    // daily habit checked in last week → open again today
+    const daily = await addHabit(user.id, 'daily');
+    await db
+      .insert(checkins)
+      .values({ habitId: daily.id, userId: user.id, localDate: addDays(weekStart, -2) });
+
+    // weekly habit that met its target LAST week → the target reset, open again
+    const weekly = await addHabit(user.id, 'weekly', 1);
+    await db
+      .insert(checkins)
+      .values({ habitId: weekly.id, userId: user.id, localDate: addDays(weekStart, -3) });
+
+    expect(await openHabitsCount(user.id, today)).toBe(2);
   });
 });
 

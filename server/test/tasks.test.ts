@@ -133,6 +133,8 @@ describe('POST /api/tasks', () => {
       dueDate: null,
       intervalHours: null,
       nextDue: null,
+      remindAt: null,
+      remindedAt: null,
     });
   });
 

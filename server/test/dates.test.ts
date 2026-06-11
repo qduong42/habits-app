@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { localDateFor, addDays, isoWeekOf, prevIsoWeek } from '../src/game/dates.js';
+import { localDateFor, addDays, isoWeekOf, prevIsoWeek, startOfIsoWeek } from '../src/game/dates.js';
 
 test('localDateFor converts instant to TZ-local date', () => {
   const at = new Date('2026-06-09T23:30:00Z');
@@ -48,6 +48,14 @@ test('isoWeekOf handles year-boundary weeks', () => {
   expect(isoWeekOf('2026-12-31')).toBe('2026-W53');
   expect(isoWeekOf('2027-01-03')).toBe('2026-W53'); // Sunday closing out W53
   expect(isoWeekOf('2027-01-04')).toBe('2027-W01');
+});
+
+test('startOfIsoWeek returns the Monday of the ISO week', () => {
+  expect(startOfIsoWeek('2026-06-11')).toBe('2026-06-08'); // Thursday → its Monday
+  expect(startOfIsoWeek('2026-06-08')).toBe('2026-06-08'); // Monday is its own start
+  expect(startOfIsoWeek('2026-06-14')).toBe('2026-06-08'); // Sunday still belongs to that Monday
+  // W01 reaches back across the year boundary (Jan 1 2026 is a Thursday)
+  expect(startOfIsoWeek('2026-01-01')).toBe('2025-12-29');
 });
 
 test('prevIsoWeek steps back one ISO week', () => {

@@ -1,8 +1,13 @@
-# Current Progress — habits-app (updated 2026-06-10 18:05)
+# Current Progress — habits-app (updated 2026-06-11, v1.2 night loop wrap-up)
 
 ## Shipped
 
 - **v1** — merged to `master` via PR #1 (28/28 plan tasks, full overnight AFK loop). Spec/plan/QA under `docs/superpowers/`. Working: auth, habits + Today checklist, XP/levels/streaks/achievements (race-hardened), Dump capture + triage → habits/one-off/recurring tasks (sub-daily reset-on-completion), Stats, settings, PWA, web push nudge, production Docker Compose.
+- **v1.2 "night shift"** — complete on `feat/v1.2-night` (off `feat/v1.1-dump-and-today`), 10/10 plan tasks, **276 tests green**, NO PR yet (open it after #2 merges — see Next actions). QA: `docs/superpowers/ralph/QA-REPORT-v1.2.md` (verdict GREEN with one feature gap for morning review: one-off completions invisible in Done History, `current_issues.md` 2026-06-11):
+  - Done History section on Today (merged checkins+completions timeline, `GET /api/history`)
+  - Task Reminders on one-off tasks (`remindAt`/`remindedAt`, per-minute push scan, Edit-UI + 🔔 badge)
+  - Change password (API + Profile section)
+  - All 7 polish items from `current_issues.md` 2026-06-10 (sw click-nav, push button errors/drift, settings input ergonomics, bounded queries + new checkins index, Tasks 0/0, fractional intervals)
 - **v1.1** — complete on `feat/v1.1-dump-and-today`, **PR #2 OPEN + mergeable** (8 commits, 246 tests green, per-task spec+quality reviews):
   - Discard with optional answer note (inline input, Enter empty = skip; stored in `discard_note`, shown in History)
   - Task-first Dump quick action (→ Task instant one-off undated) + braindump History (collapsed date rows, status icons, discard notes, "converted (since deleted)")
@@ -24,9 +29,10 @@ http://localhost:3001 — **`tsx watch`** (hot-reloads server code; plain tsx wa
 ## Next actions
 
 1. **Huy: click the serve-enable link above**, then finish serve setup (one command, see above).
-2. **Huy: review/merge PR #2** (test plan in the PR description), then refresh the deployed container (`docker compose up --build -d api` with env re-exported).
-3. **Grill session pending:** archived habits are unreachable (no view/unarchive anywhere) — open questions in `new_features.md` 2026-06-10 17:43. Don't implement before grilling.
-4. Polish backlog: `current_issues.md` (minor UX/perf items) + consider "change password" feature.
+2. **Huy: review/merge PR #2** (v1.1), THEN open + review the v1.2 PR (`gh pr create --base master --head feat/v1.2-night` — opened earlier it would drag v1.1 commits into its diff), then refresh the deployed container (`docker compose up --build -d api` with env re-exported).
+3. **Morning decision:** one-off task completions don't show in Done History (options a/b in `current_issues.md` 2026-06-11 + QA-REPORT-v1.2.md Known Gap #1).
+4. **Change the seeded passwords** — in-app change-password shipped in v1.2; `changeme123` has no excuse left.
+5. **Grill session pending:** archived habits are unreachable (no view/unarchive anywhere) — open questions in `new_features.md` 2026-06-10 17:43. Don't implement before grilling.
 
 ## Process notes (for fresh sessions)
 

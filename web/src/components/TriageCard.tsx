@@ -46,8 +46,10 @@ export default function TriageCard({ items, paused, onCelebrate, onClose }: Tria
   const busy = convertTask.isPending || discard.isPending;
 
   const intervalHours = intervalUnit === 'days' ? intervalValue * 24 : intervalValue;
+  // Fractional values are fine — the server accepts any interval >= 1h, so
+  // e.g. 1.5 days (36h) or 0.5 days (12h) are valid recurring intervals.
   const intervalValid =
-    Number.isInteger(intervalValue) && intervalHours >= 1 && intervalHours <= MAX_INTERVAL_HOURS;
+    Number.isFinite(intervalValue) && intervalHours >= 1 && intervalHours <= MAX_INTERVAL_HOURS;
 
   // Focus management, same pattern as the bottom sheets: trap entry on mount,
   // restore the previously focused element on unmount.
@@ -217,9 +219,9 @@ export default function TriageCard({ items, paused, onCelebrate, onClose }: Tria
                 <input
                   type="number"
                   className="interval-value"
-                  min={1}
+                  min={intervalUnit === 'days' ? 0.5 : 1}
                   max={intervalUnit === 'days' ? MAX_INTERVAL_HOURS / 24 : MAX_INTERVAL_HOURS}
-                  step={1}
+                  step={intervalUnit === 'days' ? 0.5 : 1}
                   value={Number.isNaN(intervalValue) ? '' : intervalValue}
                   onChange={(e) => setIntervalValue(e.target.valueAsNumber)}
                   aria-label="Interval"

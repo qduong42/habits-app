@@ -59,3 +59,47 @@ From live usage: archiving a habit removes it from Today (by design) but there i
 **Open questions for the grill session:** where do they live (Profile "Archived" section vs Stats vs a filter on Today)? unarchive action? show their historical streaks? does delete-from-archive need extra friction?
 
 **Implementation notes:** server already has `archivedAt` + the data; needs a `GET /habits?archived=1` (or include-archived flag), an unarchive endpoint (clear `archivedAt`), and a small UI list.
+
+## 2026-06-11 00:25 — Done History on Today (grilled, designed; for tonight's AFK loop)
+
+When Habits and Tasks were actually done (every done-click), shown "like the Dump History" — deliberately NOT a first-class event log yet.
+
+**Decisions (grilled):**
+- Lives at the **bottom of the Today page** as a collapsed **History** section, behaviorally identical to the Dump History (lazy fetch on first expand, date rows, per-date expansion).
+- **One merged timeline per date**: Check-ins (✅ habit name · HH:MM) and Completions (📦 task name · HH:MM) interleaved chronologically, newest date first. Sub-daily recurring tasks legitimately show multiple rows per day.
+- **Read-only** — no undo/delete from History; undo stays where it lives today.
+- Grouping uses the server's **localDate** (user-TZ correct), not browser-local createdAt.
+- Architecture: **approach A** — read view over the existing tables — three sources: `checkins`, `task_completions` (recurring), and `tasks.completed_at` (one-offs; added 2026-06-11 morning after QA gap #1 caught that the original two-source list contradicted the "every done-click" headline); NO new event table, NO new write path. API shape is forward-compatible with a future first-class events table (swap internals, UI unchanged).
+
+**Accepted v1 limitations (= documented triggers for the future first-class promotion):**
+- Deleting a task/habit cascades away its history rows.
+- Renames show the current name on old entries (live join, no snapshot).
+
+**Contract:** `GET /api/history?limit=` (default+cap 2000) → `{ entries: [{ id, kind: 'checkin'|'completion', name, localDate, createdAt }] }`, newest first, auth-scoped.
+
+**Shipped in v1.2-night, 2026-06-11** (branch `feat/v1.2-night`). ⚠️ QA found a gap baked into this very entry: "every done-click" vs. "read view over checkins + task_completions" contradict each other — **one-off task completions set only `tasks.completed_at` (no completions row) and therefore never appear in History**. Resolved 2026-06-11 morning with option (a) — History scans `tasks.completed_at` as a third read-only source (see the corrected Architecture bullet above and `current_issues.md` 2026-06-11).
+
+## 2026-06-11 00:25 — Task Reminders (grilled; for tonight's AFK loop)
+
+A one-off Task can carry a "look at this again" date — a **Reminder** that fires a push notification. ("Resurface/snooze" semantics were explicitly REJECTED: the task never hides from Today.)
+
+**Decisions (grilled):**
+- **Push reminder on that date; task stays visible in Today throughout.**
+- **One-off Tasks only** — recurring Tasks self-schedule via their interval; a second date would fight that model (rejected).
+- Defaults decided at design time (revisit in morning review if wrong): `remindAt` is a full timestamp; UI offers date + time with time defaulting 09:00 user-local. Setting/clearing lives in the task's ⋯ Edit; Triage pickers untouched tonight.
+- Refire guard: `remindedAt` timestamp set when the push goes out; editing `remindAt` clears `remindedAt`. Completed tasks never fire. No push subscription → reminder is skipped silently (same as nudges).
+- Scheduler: extend the existing node-schedule setup with a per-minute scan: `remindAt <= now AND remindedAt IS NULL AND completedAt IS NULL` → push "🔔 <task name>", stamp `remindedAt`. Trivial at this scale.
+- Server validation: `remindAt` on a recurring task → 400.
+
+**Contract:** `tasks` gains nullable `remind_at` + `reminded_at` (migration). Task create/update schemas accept `remindAt: ISO | null` (one-off only). Task serializer returns both.
+
+**Shipped in v1.2-night, 2026-06-11** (branch `feat/v1.2-night`; per-minute scan smoke-verified set→scan→stamped, including the stamp-always-without-subscription rule).
+
+## 2026-06-11 00:25 — Change Password (decided; for tonight's AFK loop)
+
+**Decisions:**
+- Profile page section: current password + new password (min 8 chars), Save.
+- `POST /api/me/password {currentPassword, newPassword}` — bcrypt-verify current (wrong → 401 `wrong_password`), zod min 8 on new, update hash → `{ok:true}`.
+- Existing JWTs stay valid after a change (no session invalidation in v1 — noted, not a goal for a tailnet-only app).
+
+**Shipped in v1.2-night, 2026-06-11** (branch `feat/v1.2-night`; smoke-verified full round-trip — old password rejected, new accepted).
