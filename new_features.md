@@ -77,6 +77,8 @@ When Habits and Tasks were actually done (every done-click), shown "like the Dum
 
 **Contract:** `GET /api/history?limit=` (default+cap 2000) → `{ entries: [{ id, kind: 'checkin'|'completion', name, localDate, createdAt }] }`, newest first, auth-scoped.
 
+**Shipped in v1.2-night, 2026-06-11** (branch `feat/v1.2-night`). ⚠️ QA found a gap baked into this very entry: "every done-click" vs. "read view over checkins + task_completions" contradict each other — **one-off task completions set only `tasks.completed_at` (no completions row) and therefore never appear in History**. Needs a morning decision; see QA-REPORT-v1.2.md Known Gap #1 and `current_issues.md` 2026-06-11.
+
 ## 2026-06-11 00:25 — Task Reminders (grilled; for tonight's AFK loop)
 
 A one-off Task can carry a "look at this again" date — a **Reminder** that fires a push notification. ("Resurface/snooze" semantics were explicitly REJECTED: the task never hides from Today.)
@@ -91,9 +93,13 @@ A one-off Task can carry a "look at this again" date — a **Reminder** that fir
 
 **Contract:** `tasks` gains nullable `remind_at` + `reminded_at` (migration). Task create/update schemas accept `remindAt: ISO | null` (one-off only). Task serializer returns both.
 
+**Shipped in v1.2-night, 2026-06-11** (branch `feat/v1.2-night`; per-minute scan smoke-verified set→scan→stamped, including the stamp-always-without-subscription rule).
+
 ## 2026-06-11 00:25 — Change Password (decided; for tonight's AFK loop)
 
 **Decisions:**
 - Profile page section: current password + new password (min 8 chars), Save.
 - `POST /api/me/password {currentPassword, newPassword}` — bcrypt-verify current (wrong → 401 `wrong_password`), zod min 8 on new, update hash → `{ok:true}`.
 - Existing JWTs stay valid after a change (no session invalidation in v1 — noted, not a goal for a tailnet-only app).
+
+**Shipped in v1.2-night, 2026-06-11** (branch `feat/v1.2-night`; smoke-verified full round-trip — old password rejected, new accepted).
