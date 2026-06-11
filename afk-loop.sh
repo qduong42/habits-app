@@ -20,11 +20,16 @@ for i in $(seq 1 "$MAX_ITER"); do
     echo "BLOCKED.md present — halting. $(date)" | tee -a "$LOG"
     break
   fi
-  if ! grep -q -- "- \[ \]" "$PLAN"; then
+  # Anchored to list items at line start — the plan HEADER mentions "- [ ]"
+  # in prose, which the unanchored grep matched forever (v1.2 night: 3 no-op
+  # iterations after completion, loop only died via MAX_ITER).
+  if ! grep -qE "^[[:space:]]*- \[ \]" "$PLAN"; then
     echo "All plan tasks ticked — done 🎉 $(date)" | tee -a "$LOG"
     break
   fi
-  next_task=$(grep -B 20 -- "- \[ \]" "$PLAN" | grep -o "^### Task [0-9]*:.*" | tail -1)
+  # First unchecked box's line number → the last task header above it.
+  next_line=$(grep -nE "^[[:space:]]*- \[ \]" "$PLAN" | head -1 | cut -d: -f1)
+  next_task=$(head -n "$next_line" "$PLAN" | grep -E "^### Task" | tail -1)
   echo "--- iteration $i/$MAX_ITER $(date) — next: ${next_task:-?}" | tee -a "$LOG"
   claude -p "$(cat "$PROMPT_FILE")" --dangerously-skip-permissions >>"$LOG" 2>&1
   status=$?
