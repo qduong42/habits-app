@@ -187,4 +187,42 @@ describe('GET /api/history', () => {
       at(3).toISOString(),
     ]);
   });
+
+  // QA gap #1 fix (a): one-offs record doneness as tasks.completedAt (no
+  // task_completions row), so history scans them as a third read-only source.
+  // Full API round-trip on purpose: complete and undo are the real write paths
+  // the view must stay consistent with.
+  it('shows a completed one-off task and drops it again on undo', async () => {
+    const u = await makeUser();
+    const created = await request(app)
+      .post('/api/tasks')
+      .set('Cookie', u.cookie)
+      .send({ name: 'File taxes' });
+    expect(created.status).toBe(201);
+    const id: string = created.body.id;
+
+    // Not completed yet → invisible.
+    let res = await request(app).get('/api/history').set('Cookie', u.cookie);
+    expect(res.body.entries).toEqual([]);
+
+    expect(
+      (await request(app).post(`/api/tasks/${id}/complete`).set('Cookie', u.cookie)).status,
+    ).toBe(200);
+    res = await request(app).get('/api/history').set('Cookie', u.cookie);
+    expect(res.body.entries).toHaveLength(1);
+    expect(res.body.entries[0]).toMatchObject({
+      id,
+      kind: 'completion',
+      name: 'File taxes',
+      localDate: TODAY,
+    });
+    expect(typeof res.body.entries[0].createdAt).toBe('string');
+
+    // Undo clears completedAt → entry disappears (read view stays consistent).
+    expect(
+      (await request(app).delete(`/api/tasks/${id}/complete`).set('Cookie', u.cookie)).status,
+    ).toBe(200);
+    res = await request(app).get('/api/history').set('Cookie', u.cookie);
+    expect(res.body.entries).toEqual([]);
+  });
 });

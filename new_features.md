@@ -69,7 +69,7 @@ When Habits and Tasks were actually done (every done-click), shown "like the Dum
 - **One merged timeline per date**: Check-ins (✅ habit name · HH:MM) and Completions (📦 task name · HH:MM) interleaved chronologically, newest date first. Sub-daily recurring tasks legitimately show multiple rows per day.
 - **Read-only** — no undo/delete from History; undo stays where it lives today.
 - Grouping uses the server's **localDate** (user-TZ correct), not browser-local createdAt.
-- Architecture: **approach A** — read view over the existing `checkins` + `task_completions` tables; NO new event table, NO new write path. API shape is forward-compatible with a future first-class events table (swap internals, UI unchanged).
+- Architecture: **approach A** — read view over the existing tables — three sources: `checkins`, `task_completions` (recurring), and `tasks.completed_at` (one-offs; added 2026-06-11 morning after QA gap #1 caught that the original two-source list contradicted the "every done-click" headline); NO new event table, NO new write path. API shape is forward-compatible with a future first-class events table (swap internals, UI unchanged).
 
 **Accepted v1 limitations (= documented triggers for the future first-class promotion):**
 - Deleting a task/habit cascades away its history rows.
@@ -77,7 +77,7 @@ When Habits and Tasks were actually done (every done-click), shown "like the Dum
 
 **Contract:** `GET /api/history?limit=` (default+cap 2000) → `{ entries: [{ id, kind: 'checkin'|'completion', name, localDate, createdAt }] }`, newest first, auth-scoped.
 
-**Shipped in v1.2-night, 2026-06-11** (branch `feat/v1.2-night`). ⚠️ QA found a gap baked into this very entry: "every done-click" vs. "read view over checkins + task_completions" contradict each other — **one-off task completions set only `tasks.completed_at` (no completions row) and therefore never appear in History**. Needs a morning decision; see QA-REPORT-v1.2.md Known Gap #1 and `current_issues.md` 2026-06-11.
+**Shipped in v1.2-night, 2026-06-11** (branch `feat/v1.2-night`). ⚠️ QA found a gap baked into this very entry: "every done-click" vs. "read view over checkins + task_completions" contradict each other — **one-off task completions set only `tasks.completed_at` (no completions row) and therefore never appear in History**. Resolved 2026-06-11 morning with option (a) — History scans `tasks.completed_at` as a third read-only source (see the corrected Architecture bullet above and `current_issues.md` 2026-06-11).
 
 ## 2026-06-11 00:25 — Task Reminders (grilled; for tonight's AFK loop)
 
