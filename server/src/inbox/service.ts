@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { inboxItems } from '../db/schema.js';
 import type { InboxItem } from '../db/schema.js';
@@ -20,6 +20,7 @@ export interface InboxItemContract {
   status: 'open' | 'converted' | 'discarded';
   habitId: string | null;
   taskId: string | null;
+  discardNote: string | null;
   createdAt: string;
 }
 
@@ -58,6 +59,7 @@ function toContract(item: InboxItem): InboxItemContract {
     status: item.status,
     habitId: item.habitId,
     taskId: item.taskId, // set by convert-task (Task 27); null until then
+    discardNote: item.discardNote, // discards only; null on open/converted items
     createdAt: item.createdAt.toISOString(),
   };
 }
@@ -190,11 +192,19 @@ export async function convertItemToTask(
   return { item, task: target, unlockedAchievements };
 }
 
-/** Discard is allowed only from 'open' — the conditional update makes it atomic. */
-export async function discardItem(userId: string, itemId: string): Promise<InboxItemContract> {
+/**
+ * Discard is allowed only from 'open' — the conditional update makes it
+ * atomic. `note` (already trimmed/normalized to null by the route) is the
+ * optional answer captured at discard time; only this path ever sets it.
+ */
+export async function discardItem(
+  userId: string,
+  itemId: string,
+  note: string | null,
+): Promise<InboxItemContract> {
   const [updated] = await db
     .update(inboxItems)
-    .set({ status: 'discarded' })
+    .set({ status: 'discarded', discardNote: note })
     .where(
       and(
         eq(inboxItems.id, itemId),
@@ -212,4 +222,55 @@ export async function discardItem(userId: string, itemId: string): Promise<Inbox
     .where(and(eq(inboxItems.id, itemId), eq(inboxItems.userId, userId)));
   if (existing) throw alreadyTriaged();
   throw notFound();
+}
+
+const stillOpen = () =>
+  new HttpError(409, 'still_open', 'Open dump items must be discarded, not deleted');
+
+/**
+ * Clear one braindump History row (v1.1 follow-up): hard delete, NON-open
+ * items only — open items must go through Discard so triage stays the only
+ * exit from the open list. Deleting never touches a created habit/task (the
+ * FK points inbox→habit/task; this is just a row delete).
+ */
+export async function deleteHistoryItem(userId: string, itemId: string): Promise<void> {
+  const deleted = await db
+    .delete(inboxItems)
+    .where(
+      and(
+        eq(inboxItems.id, itemId),
+        eq(inboxItems.userId, userId),
+        ne(inboxItems.status, 'open'),
+      ),
+    )
+    .returning({ id: inboxItems.id });
+  if (deleted.length > 0) return;
+
+  // Nothing matched: distinguish "not yours / missing" (404) from "still open" (409).
+  const [existing] = await db
+    .select({ id: inboxItems.id })
+    .from(inboxItems)
+    .where(and(eq(inboxItems.id, itemId), eq(inboxItems.userId, userId)));
+  if (existing) throw stillOpen();
+  throw notFound();
+}
+
+/**
+ * Clear a History day group: delete the caller's NON-open items among `ids`
+ * (the client sends the exact ids of a date group — TZ-proof, no server-side
+ * date math). Open/foreign/missing ids are silently ignored; the count of
+ * actually deleted rows comes back so the UI can report reality.
+ */
+export async function clearHistory(userId: string, ids: string[]): Promise<number> {
+  const deleted = await db
+    .delete(inboxItems)
+    .where(
+      and(
+        inArray(inboxItems.id, ids),
+        eq(inboxItems.userId, userId),
+        ne(inboxItems.status, 'open'),
+      ),
+    )
+    .returning({ id: inboxItems.id });
+  return deleted.length;
 }

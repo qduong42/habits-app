@@ -1,4 +1,4 @@
-# New Features (grilled, NOT yet implemented)
+# New Features (grilled; shipped status noted per entry)
 
 Decisions resolved via grill-with-docs sessions; domain language in `CONTEXT.md`. Append new entries with date/time.
 
@@ -13,6 +13,8 @@ From live usage: the Task/Habit distinction is too subtle, and the Dump's quick 
 
 **Implementation notes for the planner:** mostly `web/src/pages/Today.tsx` + `index.css` (the 📌 Tasks section already exists and only needs visual promotion); Dump quick action needs a small inline once/recurring picker or defaults to one-off undated with edit affordance — decide at plan time.
 
+**Shipped in v1.1, 2026-06-10** (branch `feat/v1.1-dump-and-today`; → Task converts immediately to a one-off undated task, scheduling later via Edit/Triage).
+
 ## 2026-06-10 10:21 — Dump: braindump History (by dump date)
 
 **Decisions (grilled):**
@@ -22,6 +24,8 @@ From live usage: the Task/Habit distinction is too subtle, and the Dump's quick 
 - Data caveat the UI must tolerate: converted items whose task/habit was later deleted have `status: 'converted'` with both links null (FK ON DELETE SET NULL) — show as "converted (since deleted)".
 
 **Implementation notes:** `GET /inbox?all=1` already returns everything; likely wants a grouped variant or client-side grouping; no migration needed.
+
+**Shipped in v1.1, 2026-06-10** (branch `feat/v1.1-dump-and-today`; client-side grouping over lazily fetched `?all=1`).
 
 ## 2026-06-10 11:49 — Discard with optional answer note
 
@@ -33,3 +37,25 @@ Sometimes a dumped question gets answered at triage time ("sasi teeth is ok?" �
 - Surfaces in the braindump **History** under the item: "sasi teeth is ok? — 🗑 yes, dentist said fine". The History UI (feature above) must render it.
 
 **Implementation notes:** extend `POST /inbox/:id/discard` body `{note?}` (zod, cap ~2000); inline input replacing the current `window.confirm` (the prompt itself becomes the confirm — Enter discards, Escape cancels); InboxItem contract gains `discardNote: string | null`.
+
+**Shipped in v1.1, 2026-06-10** (branch `feat/v1.1-dump-and-today`; `discard_note` migration, note ≤2000 trimmed, empty → null).
+
+## 2026-06-10 17:40 — Dump: clear braindump History (per item and per day)
+
+History grows forever; sometimes you want a row (or a whole day) gone for good.
+
+**Decisions:**
+- **Hard delete** of history (non-open) inbox items — no soft-delete/undo. Deleting never touches the created habit/task (the FK points inbox→habit/task; it's just a row delete).
+- `DELETE /inbox/:id` — non-open items only; an **open** item → **409 `still_open`** (open dump items must use Discard); foreign/missing/bogus → 404; success → `{ok:true}`.
+- `POST /inbox/history/clear` body `{ids: uuid[] min 1 max 500}` — deletes the caller's non-open items among ids, silently ignores open/foreign/missing ones → `{deleted: n}`. The client sends the **exact ids of a day group** — TZ-proof, no server-side date math.
+- UI: a quiet **✕** on each history row (immediate, no confirm — it's history) and a **Clear** button on each date row (`window.confirm("Delete N history items from <label>?")`). The day group disappears on its own once emptied.
+
+**Shipped in v1.1, 2026-06-10** (branch `feat/v1.1-dump-and-today`; post-plan scope, decided here rather than in the v1 plan).
+
+## 2026-06-10 17:43 — Archived habits are unreachable (NOT grilled yet, NOT implemented)
+
+From live usage: archiving a habit removes it from Today (by design) but there is **no view anywhere** to see archived habits — no unarchive, no history of them (their check-in history still counts in Stats totals, but the habit itself is invisible).
+
+**Open questions for the grill session:** where do they live (Profile "Archived" section vs Stats vs a filter on Today)? unarchive action? show their historical streaks? does delete-from-archive need extra friction?
+
+**Implementation notes:** server already has `archivedAt` + the data; needs a `GET /habits?archived=1` (or include-archived flag), an unarchive endpoint (clear `archivedAt`), and a small UI list.

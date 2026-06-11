@@ -1510,3 +1510,226 @@ body {
     animation: none;
   }
 }
+
+/* ============================================================================
+   v1.1 additions — Dump task-first quick action + braindump History
+   ========================================================================== */
+
+/* → Task quick action — task-warm tint (matches the Today tasks accent). */
+.dump-btn-task {
+  border: 1px solid #bf360c;
+  background: #fff;
+  color: #bf360c;
+}
+
+/* "Task created ✓" inline confirmation (auto-dismisses). */
+.dump-task-created {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #2e7d32;
+}
+
+/* --- Braindump History (collapsed date rows at the bottom of Dump) --------- */
+
+.dump-history {
+  margin-top: 24px;
+}
+
+.dump-history-toggle {
+  display: block;
+  width: 100%;
+  padding: 8px 0;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: left;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-top: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.dump-history-toggle::before {
+  content: '▸ ';
+}
+
+.dump-history-toggle[aria-expanded='true']::before {
+  content: '▾ ';
+}
+
+.dump-history-dates {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dump-history-date {
+  margin-bottom: 8px;
+}
+
+.dump-history-date-toggle {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  color: var(--text);
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.dump-history-items {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.dump-history-item {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dump-history-item:last-child {
+  border-bottom: none;
+}
+
+.dump-history-item-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.dump-history-time {
+  flex: none;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.dump-history-text {
+  flex: 1;
+  margin: 0;
+  font-size: 14px;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  min-width: 0;
+}
+
+.dump-history-status {
+  flex: none;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Date row = expand toggle + per-day Clear button side by side. */
+.dump-history-date-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.dump-history-date-row .dump-history-date-toggle {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}
+
+/* Per-day "Clear" — destructive accent, confirmed via window.confirm. */
+.dump-history-clear {
+  flex: none;
+  padding: 0 12px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #c62828;
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+/* Per-item ✕ — quiet hard delete of one history row (no confirm). */
+.dump-history-delete {
+  flex: none;
+  padding: 0 4px;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: inherit;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* discardNote shown underneath the discarded item it answers. */
+.dump-history-note {
+  margin: 2px 0 0 44px; /* clears the HH:MM column */
+  font-size: 13px;
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+/* --- Today two-section split (✅ Tasks vs 🌱 Habits) ----------------------- */
+
+/* Tinted mega-section containers — subtle washes so the approved white row
+   cards stay readable inside. Tasks warm (#bf360c), Habits purple (#5e35b1). */
+.mega-section {
+  margin-bottom: 20px;
+  padding: 12px 10px 5px; /* bottom 5px + last row's 7px margin ≈ 12px */
+  border: 1px solid;
+  border-radius: 16px;
+}
+
+.mega-tasks {
+  background: rgba(191, 54, 12, 0.05);
+  border-color: rgba(191, 54, 12, 0.18);
+}
+
+.mega-habits {
+  background: rgba(94, 53, 177, 0.05);
+  border-color: rgba(94, 53, 177, 0.18);
+}
+
+/* Section header — deliberately bigger than the 12px uppercase .cat-header
+   sub-headers that stay inside the Habits section. */
+.mega-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 2px 8px;
+}
+
+.mega-title {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.mega-tasks .mega-title {
+  color: #bf360c;
+}
+
+.mega-habits .mega-title {
+  color: #5e35b1;
+}
+
+.mega-count {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Inner category groups: tighter spacing inside the container. */
+.mega-section .cat-group {
+  margin-bottom: 12px;
+}
+
+.mega-section .cat-group:last-child {
+  margin-bottom: 0;
+}

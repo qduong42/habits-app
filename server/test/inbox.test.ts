@@ -68,8 +68,9 @@ function convertTask(cookie: string, itemId: string, body: Record<string, unknow
   return request(app).post(`/api/inbox/${itemId}/convert-task`).set('Cookie', cookie).send(body);
 }
 
-function discard(cookie: string, itemId: string) {
-  return request(app).post(`/api/inbox/${itemId}/discard`).set('Cookie', cookie);
+function discard(cookie: string, itemId: string, body?: Record<string, unknown>) {
+  const req = request(app).post(`/api/inbox/${itemId}/discard`).set('Cookie', cookie);
+  return body === undefined ? req : req.send(body);
 }
 
 async function cleanup() {
@@ -124,6 +125,7 @@ describe('POST /api/inbox (capture)', () => {
       status: 'open',
       habitId: null,
       taskId: null,
+      discardNote: null,
       createdAt: expect.any(String),
     });
   });
@@ -217,6 +219,7 @@ describe('POST /api/inbox/:id/convert', () => {
       status: 'converted',
       habitId: res.body.habit.id,
       taskId: null,
+      discardNote: null,
       createdAt: expect.any(String),
     });
     expect(res.body.unlockedAchievements).toEqual([
@@ -385,6 +388,7 @@ describe('POST /api/inbox/:id/convert-task (Task 27)', () => {
       status: 'converted',
       habitId: null, // exactly one of habitId/taskId when converted
       taskId: res.body.task.id,
+      discardNote: null,
       createdAt: expect.any(String),
     });
     // first-conversion unlocks through the convert-task path too
@@ -595,6 +599,151 @@ describe('deleting a converted habit/task keeps the inbox item (FK ON DELETE SET
   });
 });
 
+// v1.1 follow-up: clear braindump History — hard delete of NON-open items,
+// per item (DELETE /inbox/:id) and per day group (POST /inbox/history/clear).
+describe('DELETE /api/inbox/:id (clear one history item)', () => {
+  it('hard-deletes a discarded item → {ok:true}; gone from ?all=1', async () => {
+    const u = await makeUser();
+    const itemId = await capture(u.cookie, { text: 'old thought' });
+    await discard(u.cookie, itemId);
+
+    const res = await request(app).delete(`/api/inbox/${itemId}`).set('Cookie', u.cookie);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+
+    const all = await request(app).get('/api/inbox?all=1').set('Cookie', u.cookie);
+    expect(all.body.map((i: { id: string }) => i.id)).not.toContain(itemId);
+
+    // deleting twice → 404 (the row is gone)
+    const again = await request(app).delete(`/api/inbox/${itemId}`).set('Cookie', u.cookie);
+    expect(again.status).toBe(404);
+    expect(again.body.error.code).toBe('not_found');
+  });
+
+  it('deleting a converted item never touches the created habit or task', async () => {
+    const u = await makeUser();
+
+    const habitItem = await capture(u.cookie, { text: 'becomes a habit' });
+    const habitRes = await convert(u.cookie, habitItem, {
+      name: 'Survivor habit',
+      categoryId: u.categoryId,
+      frequencyType: 'daily',
+    });
+    expect(habitRes.status).toBe(200);
+
+    const taskItem = await capture(u.cookie, { text: 'becomes a task' });
+    const taskRes = await convertTask(u.cookie, taskItem, { name: 'Survivor task' });
+    expect(taskRes.status).toBe(200);
+
+    for (const id of [habitItem, taskItem]) {
+      const del = await request(app).delete(`/api/inbox/${id}`).set('Cookie', u.cookie);
+      expect(del.status).toBe(200);
+    }
+
+    const habitsList = await request(app).get('/api/habits').set('Cookie', u.cookie);
+    expect(habitsList.body.habits.map((h: { id: string }) => h.id)).toContain(
+      habitRes.body.habit.id,
+    );
+    const tasksList = await request(app).get('/api/tasks').set('Cookie', u.cookie);
+    expect(tasksList.body.tasks.map((t: { id: string }) => t.id)).toContain(taskRes.body.task.id);
+  });
+
+  it("open item → 409 still_open (open items must use Discard, not delete)", async () => {
+    const u = await makeUser();
+    const itemId = await capture(u.cookie, { text: 'still on my mind' });
+
+    const res = await request(app).delete(`/api/inbox/${itemId}`).set('Cookie', u.cookie);
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('still_open');
+
+    // the item is untouched and still discardable
+    expect((await discard(u.cookie, itemId)).status).toBe(200);
+  });
+
+  it("foreign user's item → 404; bogus uuid → 404; missing uuid → 404", async () => {
+    const u = await makeUser();
+    const other = await makeUser();
+    const foreignId = await capture(other.cookie, { text: 'not yours to clear' });
+    await discard(other.cookie, foreignId);
+
+    const foreign = await request(app).delete(`/api/inbox/${foreignId}`).set('Cookie', u.cookie);
+    expect(foreign.status).toBe(404);
+    expect(foreign.body.error.code).toBe('not_found');
+    // the other user's history row survives the attempt
+    const all = await request(app).get('/api/inbox?all=1').set('Cookie', other.cookie);
+    expect(all.body.map((i: { id: string }) => i.id)).toContain(foreignId);
+
+    expect((await request(app).delete('/api/inbox/not-a-uuid').set('Cookie', u.cookie)).status).toBe(404);
+    expect(
+      (
+        await request(app)
+          .delete('/api/inbox/00000000-0000-4000-8000-000000000000')
+          .set('Cookie', u.cookie)
+      ).status,
+    ).toBe(404);
+  });
+
+  it('401 unauthenticated', async () => {
+    const res = await request(app).delete('/api/inbox/00000000-0000-4000-8000-000000000000');
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('POST /api/inbox/history/clear (clear a day group)', () => {
+  function clear(cookie: string, body: Record<string, unknown>) {
+    return request(app).post('/api/inbox/history/clear').set('Cookie', cookie).send(body);
+  }
+
+  it("deletes the caller's NON-open items among ids; open/foreign/missing ids ignored → {deleted: n}", async () => {
+    const u = await makeUser();
+    const other = await makeUser();
+
+    const discarded = await capture(u.cookie, { text: 'discarded one' });
+    await discard(u.cookie, discarded);
+    const converted = await capture(u.cookie, { text: 'converted one' });
+    expect((await convertTask(u.cookie, converted, { name: 'Converted' })).status).toBe(200);
+    const stillOpen = await capture(u.cookie, { text: 'still open' });
+    const foreign = await capture(other.cookie, { text: 'foreign history' });
+    await discard(other.cookie, foreign);
+
+    const res = await clear(u.cookie, {
+      ids: [discarded, converted, stillOpen, foreign, '00000000-0000-4000-8000-000000000000'],
+    });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ deleted: 2 }); // only the caller's history rows
+
+    const all = await request(app).get('/api/inbox?all=1').set('Cookie', u.cookie);
+    // open item survived; both history items are gone
+    expect(all.body.map((i: { id: string; status: string }) => [i.id, i.status])).toEqual([
+      [stillOpen, 'open'],
+    ]);
+    // the foreign user's history is untouched
+    const otherAll = await request(app).get('/api/inbox?all=1').set('Cookie', other.cookie);
+    expect(otherAll.body.map((i: { id: string }) => i.id)).toContain(foreign);
+  });
+
+  it('validation 400: missing ids, empty ids, non-uuid entry, more than 500 ids', async () => {
+    const u = await makeUser();
+    for (const body of [
+      {},
+      { ids: [] },
+      { ids: ['not-a-uuid'] },
+      { ids: Array.from({ length: 501 }, () => '00000000-0000-4000-8000-000000000000') },
+    ]) {
+      const res = await clear(u.cookie, body);
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('validation');
+    }
+  });
+
+  it('401 unauthenticated', async () => {
+    const res = await request(app)
+      .post('/api/inbox/history/clear')
+      .send({ ids: ['00000000-0000-4000-8000-000000000000'] });
+    expect(res.status).toBe(401);
+  });
+});
+
 describe('POST /api/inbox/:id/discard', () => {
   it('marks the item discarded; convert afterwards → 409', async () => {
     const u = await makeUser();
@@ -626,5 +775,85 @@ describe('POST /api/inbox/:id/discard', () => {
     const foreignId = await capture(other.cookie, { text: 'not yours' });
     expect((await discard(u.cookie, foreignId)).status).toBe(404);
     expect((await discard(u.cookie, 'nope')).status).toBe(404);
+  });
+
+  it('stores an optional answer note (trimmed) and serializes it everywhere', async () => {
+    const u = await makeUser();
+    const itemId = await capture(u.cookie, { text: 'sasi teeth is ok?' });
+
+    const res = await discard(u.cookie, itemId, { note: '  answered: yes  ' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      id: itemId,
+      status: 'discarded',
+      discardNote: 'answered: yes', // trimmed
+    });
+
+    // the note survives into the ?all=1 listing (History data source)
+    const all = await request(app).get('/api/inbox?all=1').set('Cookie', u.cookie);
+    expect(all.status).toBe(200);
+    expect(all.body).toEqual([
+      expect.objectContaining({ id: itemId, status: 'discarded', discardNote: 'answered: yes' }),
+    ]);
+  });
+
+  it('empty/whitespace note or no body → discardNote null', async () => {
+    const u = await makeUser();
+
+    const noBody = await discard(u.cookie, await capture(u.cookie, { text: 'no body' }));
+    expect(noBody.status).toBe(200);
+    expect(noBody.body).toMatchObject({ status: 'discarded', discardNote: null });
+
+    const emptyBody = await discard(u.cookie, await capture(u.cookie, { text: 'empty body' }), {});
+    expect(emptyBody.status).toBe(200);
+    expect(emptyBody.body).toMatchObject({ status: 'discarded', discardNote: null });
+
+    const emptyNote = await discard(u.cookie, await capture(u.cookie, { text: 'empty note' }), {
+      note: '',
+    });
+    expect(emptyNote.status).toBe(200);
+    expect(emptyNote.body).toMatchObject({ status: 'discarded', discardNote: null });
+
+    const whitespace = await discard(u.cookie, await capture(u.cookie, { text: 'whitespace' }), {
+      note: '   \n ',
+    });
+    expect(whitespace.status).toBe(200);
+    expect(whitespace.body).toMatchObject({ status: 'discarded', discardNote: null });
+  });
+
+  it('note longer than 2000 chars → 400 validation; the item stays open', async () => {
+    const u = await makeUser();
+    const itemId = await capture(u.cookie, { text: 'long note' });
+
+    const res = await discard(u.cookie, itemId, { note: 'x'.repeat(2001) });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('validation');
+
+    // the failed discard did not triage the item — a retry still works
+    const retry = await discard(u.cookie, itemId, { note: 'x'.repeat(2000) });
+    expect(retry.status).toBe(200);
+    expect(retry.body.discardNote).toBe('x'.repeat(2000));
+  });
+
+  it('a note in the convert bodies is ignored — discardNote stays null on conversions', async () => {
+    const u = await makeUser();
+
+    const habitItem = await capture(u.cookie, { text: 'habit with stray note' });
+    const habitRes = await convert(u.cookie, habitItem, {
+      name: 'Stray note habit',
+      categoryId: u.categoryId,
+      frequencyType: 'daily',
+      note: 'should be ignored',
+    });
+    expect(habitRes.status).toBe(200);
+    expect(habitRes.body.item).toMatchObject({ status: 'converted', discardNote: null });
+
+    const taskItem = await capture(u.cookie, { text: 'task with stray note' });
+    const taskRes = await convertTask(u.cookie, taskItem, {
+      name: 'Stray note task',
+      note: 'should be ignored',
+    });
+    expect(taskRes.status).toBe(200);
+    expect(taskRes.body.item).toMatchObject({ status: 'converted', discardNote: null });
   });
 });

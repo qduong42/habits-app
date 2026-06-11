@@ -1,31 +1,33 @@
-# Current Progress — habits-app (updated 2026-06-10 10:30, paused by Huy)
+# Current Progress — habits-app (updated 2026-06-10 18:05)
 
-Branch `feat/habits-app-v1`, all work committed + pushed. Dev server may be running locally on :3001 (`SERVE_STATIC=1 PORT=3001 npx tsx server/src/index.ts`, postgres via `docker compose up -d --wait postgres`). Logins: huy/lea, password `changeme123` (SEED_PASSWORD default).
+## Shipped
 
-## Done: 26 of 28 plan tasks (Tasks 0–21 + 25–27)
+- **v1** — merged to `master` via PR #1 (28/28 plan tasks, full overnight AFK loop). Spec/plan/QA under `docs/superpowers/`. Working: auth, habits + Today checklist, XP/levels/streaks/achievements (race-hardened), Dump capture + triage → habits/one-off/recurring tasks (sub-daily reset-on-completion), Stats, settings, PWA, web push nudge, production Docker Compose.
+- **v1.1** — complete on `feat/v1.1-dump-and-today`, **PR #2 OPEN + mergeable** (8 commits, 246 tests green, per-task spec+quality reviews):
+  - Discard with optional answer note (inline input, Enter empty = skip; stored in `discard_note`, shown in History)
+  - Task-first Dump quick action (→ Task instant one-off undated) + braindump History (collapsed date rows, status icons, discard notes, "converted (since deleted)")
+  - Today two-section split (✅ Tasks / 🌱 Habits tinted mega-sections)
+  - Add-button offers tasks/habits only (Dump-a-thought removed per Huy)
+  - History clear: ✕ per item + per-day Clear with confirm
 
-Full overnight AFK loop (fresh subagent per task + spec review + quality review + fix loops). 234 server tests, verify/lint green at HEAD. Source of truth for task state: the checkboxes in `docs/superpowers/plans/2026-06-09-habits-app-v1.md`.
+## Running locally
 
-Working today: auth, habits CRUD + Today checklist (category groups), check-in/undo with XP/levels/streaks/achievements (race-hardened with user-row locks), Dump capture + card-by-card triage → one-off/recurring tasks (reset-on-completion, sub-daily OK) or habits, 📌 Tasks section on Today (+ ⏳ Scheduled toggle), Stats, settings (nudge time/TZ), PWA (installable, injectManifest SW), web push + daily nudge job (needs VAPID keys, see README).
+http://localhost:3001 — **`tsx watch`** (hot-reloads server code; plain tsx was the root cause of the "✕ doesn't remove" bug — stale process missing the new routes). Postgres :5433. Logins huy/lea, `changeme123`. Frontend changes still need `npm run build -w web` (served from static dist).
 
-## Remaining plan work (resume with subagent-driven-development, one task at a time)
+## Deployment (Tailscale, option 2 — in progress 2026-06-10 evening)
 
-1. **Task 22 — Production compose + README**: a full dispatch prompt was already drafted; key points: multi-stage server/Dockerfile (mind WEB_DIST relative resolution in server/src/app.ts and cwd-relative ./drizzle in migrate.ts), compose `api` service (host port 3002 — dev server holds 3001; env incl. optional VAPID trio), expand README (keep Push setup section), smoke via curl, leave postgres running.
-2. **Task 23 — Refactor pass**: big queued carry-over list is IN the plan's Task 23 text (indexes, listTasks DISTINCT ON, level/undo dedup, parseBody, CategoryContract direction, convertItem/convertItemToTask fold, web sheet/ActionSheet/optimistic-toggle dedup, checkbox roles, ['stats'] invalidation on mutations, settings polish). No behavior changes; verify green before/after.
-3. **Task 24 — QA report**: full suite + curl flows → docs/superpowers/ralph/QA-REPORT.md. RULE: smoke flows must use a THROWAWAY user, never seeded huy/lea (see current_issues.md — achievement pollution incident).
+- **Production container `habits-app-api-1` is RUNNING on host port 3002** (`docker compose up --build -d api`, `restart: unless-stopped`): NODE_ENV=production, shares the dev postgres volume/db (`habits`) so all data is live there. **Secrets are baked into the container env at creation** (JWT_SECRET = random hex, VAPID keypair generated 2026-06-10 via `npx web-push generate-vapid-keys`, subject mailto:h.duong@turbit.de) — they persist across restarts/reboots but are LOST if the container is recreated; on `docker compose up --build` after merges, re-export them in the shell first (or finally create a `.env` next to compose — Huy must do that by hand, agents can't write `.env*`). To read current values: `docker inspect habits-app-api-1 --format '{{json .Config.Env}}'`.
+- **Tailscale**: machine moved from work tailnet (turbitduong@) to personal tailnet **huyictigcse@** via profile switch (`tailscale switch` toggles; work profile preserved). Devices on personal tailnet: this machine (100.127.36.43), huys-s24-ultra, iphone171.
+- **BLOCKED on one manual click:** Tailscale "serve" isn't enabled on the personal tailnet yet. Huy must open https://login.tailscale.com/f/serve?node=nMjJvnxR6i11CNTRL logged in as huyictigcse@ and enable (earlier 404 was a work/personal account mismatch in the browser). THEN run: `tailscale serve --bg --https=443 http://localhost:3002` → app at `https://huy-tuxedo-infinitybook-pro-gen8-mk1.<tailnet>.ts.net`. Phones: open that URL → Add to Home Screen → enable notifications in Profile.
+- Logins still huy/lea `changeme123` — fine for tailnet-only, but should be changed (no in-app password change exists; would need a hash update script or new feature).
 
-## New features (grilled 2026-06-10, NOT implemented — decisions in new_features.md)
+## Next actions
 
-- Today two-section split (✅ Tasks / 🌱 Habits) + "→ Task" first quick action on Dump items (chores-vs-practices boundary, CONTEXT.md).
-- Braindump History: all triaged items, grouped by dump date, collapsed dates expand. No schema change.
-When Huy says go: brainstorm is already done — go straight to writing-plans for these two, then execute.
+1. **Huy: click the serve-enable link above**, then finish serve setup (one command, see above).
+2. **Huy: review/merge PR #2** (test plan in the PR description), then refresh the deployed container (`docker compose up --build -d api` with env re-exported).
+3. **Grill session pending:** archived habits are unreachable (no view/unarchive anywhere) — open questions in `new_features.md` 2026-06-10 17:43. Don't implement before grilling.
+4. Polish backlog: `current_issues.md` (minor UX/perf items) + consider "change password" feature.
 
-## Open issues
+## Process notes (for fresh sessions)
 
-See `current_issues.md` (Bright Idea incident resolved + minor polish list, mostly folded into Task 23).
-
-## Process notes
-
-- Permission classifier blocks: pushing to master (use the feature branch; merge decision is Huy's, via superpowers:finishing-a-development-branch), any `.env*` writes (code has dev fallbacks), ralph.sh with --dangerously-skip-permissions (run the loop in-session instead).
-- Plan Rules section (top of plan file) is binding for every worker; review carry-overs get appended to Task 23's text.
-- `current_tasks.md` is the older handoff (pre-implementation) — this file supersedes it.
+Workflow: grill-with-docs → record decisions in new_features.md → plan → subagent-per-task with spec+quality reviews → PR. Classifier blocks: master pushes, `.env*` writes, remote-branch deletion, skip-permissions loops. Never mutate as seeded huy/lea (achievement pollution). CONTEXT.md = domain language; v1 plan Rules 1–11 binding for workers. `current_tasks.md` is an obsolete early handoff.

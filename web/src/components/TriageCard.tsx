@@ -2,29 +2,21 @@
 // one dump item per screen with progress "2 / 5" in the header and four big
 // option buttons — ✅ Task once (inline optional due date) / 🔁 Task recurring
 // (inline interval picker) / 🌱 Habit (existing HabitForm convert mode on
-// top) / 🗑 Let it go (discard, no confirm — the flow is the confirm). Each
+// top) / 🗑 Let it go (inline optional answer note — the input is the
+// confirm: Enter discards, even empty; Esc cancels the input only). Each
 // action advances to the next item; the final card says "Mind clear 🧘".
 // Esc / ✕ closes mid-flow (triage progress persists server-side naturally).
 
 import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '../api';
-import { formatAge } from '../format';
+import { formatAge, taskNameFromDumpText } from '../format';
 import { useConvertTask, useDiscard } from '../hooks/useInbox';
 import HabitForm from './HabitForm';
 import type { Achievement, ConvertTaskInput, InboxItem } from '../types';
 
 const MAX_INTERVAL_HOURS = 8760; // one year — server-enforced ceiling
-const MAX_TASK_NAME = 200; // server-enforced name limit
 
-/** Dump text → task-name prefill: first line, capped at the server limit. */
-function taskNameFromDumpText(text: string): string {
-  const firstLine = text.split('\n', 1)[0]!.trim();
-  return firstLine.length > MAX_TASK_NAME
-    ? firstLine.slice(0, MAX_TASK_NAME - 1).trimEnd() + '…'
-    : firstLine;
-}
-
-type Mode = 'idle' | 'once' | 'recurring' | 'habit';
+type Mode = 'idle' | 'once' | 'recurring' | 'habit' | 'letgo';
 type IntervalUnit = 'hours' | 'days';
 
 interface TriageCardProps {
@@ -46,6 +38,7 @@ export default function TriageCard({ items, paused, onCelebrate, onClose }: Tria
   const [dueDate, setDueDate] = useState('');
   const [intervalValue, setIntervalValue] = useState(1);
   const [intervalUnit, setIntervalUnit] = useState<IntervalUnit>('days');
+  const [discardNote, setDiscardNote] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
 
   const total = items.length;
@@ -68,10 +61,19 @@ export default function TriageCard({ items, paused, onCelebrate, onClose }: Tria
   }, []);
 
   // Esc closes mid-flow — except while the HabitForm or a Celebration is on
-  // top (each has its own Esc handler that should win the keypress).
+  // top (each has its own Esc handler that should win the keypress). In
+  // 'letgo' mode Esc only cancels the note input, never the whole flow — the
+  // input's own handler stops propagation, and this guard catches the
+  // edge case where focus has left the input.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape' && mode !== 'habit' && !paused) onClose();
+      if (e.key !== 'Escape' || mode === 'habit' || paused) return;
+      if (mode === 'letgo') {
+        setMode('idle');
+        setDiscardNote('');
+      } else {
+        onClose();
+      }
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
@@ -83,6 +85,7 @@ export default function TriageCard({ items, paused, onCelebrate, onClose }: Tria
     setDueDate('');
     setIntervalValue(1);
     setIntervalUnit('days');
+    setDiscardNote('');
     setActionError(null);
     setIndex((i) => i + 1);
   }
@@ -111,10 +114,15 @@ export default function TriageCard({ items, paused, onCelebrate, onClose }: Tria
     );
   }
 
+  /** Enter in the note input — empty note discards without one; advances as before. */
   function letItGo() {
     if (!item || busy) return;
+    const note = discardNote.trim();
     setActionError(null);
-    discard.mutate(item.id, { onSuccess: () => advance(), onError: fail });
+    discard.mutate(
+      { itemId: item.id, ...(note !== '' ? { note } : {}) },
+      { onSuccess: () => advance(), onError: fail },
+    );
   }
 
   return (
@@ -250,12 +258,40 @@ export default function TriageCard({ items, paused, onCelebrate, onClose }: Tria
 
             <button
               type="button"
-              className="triage-option triage-option-letgo"
+              className={
+                'triage-option triage-option-letgo' +
+                (mode === 'letgo' ? ' triage-option-active' : '')
+              }
               disabled={busy}
-              onClick={letItGo}
+              onClick={() => setMode(mode === 'letgo' ? 'idle' : 'letgo')}
             >
               🗑 Let it go
             </button>
+            {mode === 'letgo' && (
+              <div className="triage-inline">
+                <input
+                  className="capture-input"
+                  value={discardNote}
+                  onChange={(e) => setDiscardNote(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      letItGo();
+                    } else if (e.key === 'Escape') {
+                      // Cancel the note input only — never the triage flow
+                      // (don't let the window Esc handler see this keypress).
+                      e.stopPropagation();
+                      setMode('idle');
+                      setDiscardNote('');
+                    }
+                  }}
+                  placeholder="Optional note — Enter to discard, Esc to cancel"
+                  aria-label="Optional discard note"
+                  maxLength={2000}
+                  autoFocus
+                />
+              </div>
+            )}
           </div>
 
           {actionError && <p className="form-error">{actionError}</p>}

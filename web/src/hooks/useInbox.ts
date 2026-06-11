@@ -20,6 +20,20 @@ export function useInbox() {
   });
 }
 
+/**
+ * ALL dump items (open + triaged), newest first — feeds the braindump History.
+ * Lazy: pass `enabled=false` until the History section is first expanded.
+ * Sharing the ['inbox'] key prefix means every mutation's
+ * invalidateQueries({queryKey: ['inbox']}) keeps this fresh too.
+ */
+export function useInboxAll(enabled: boolean) {
+  return useQuery({
+    queryKey: ['inbox', 'all'],
+    queryFn: () => apiFetch<InboxItem[]>('/inbox?all=1'),
+    enabled,
+  });
+}
+
 export function useCapture() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -67,11 +81,40 @@ export function useConvertTask() {
   });
 }
 
-export function useDiscard() {
+/** Clear one History item (non-open) — hard delete, never touches a created
+ * habit/task. Invalidating ['inbox'] refreshes the History (['inbox','all']). */
+export function useDeleteHistoryItem() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (itemId: string) =>
-      apiFetch<InboxItem>(`/inbox/${itemId}/discard`, { method: 'POST' }),
+      apiFetch<{ ok: true }>(`/inbox/${itemId}`, { method: 'DELETE' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['inbox'] }),
+  });
+}
+
+/** Clear a History day group — sends the group's exact item ids (TZ-proof);
+ * the server deletes the caller's non-open ones and ignores the rest. */
+export function useClearHistory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) =>
+      apiFetch<{ deleted: number }>('/inbox/history/clear', {
+        method: 'POST',
+        body: JSON.stringify({ ids }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['inbox'] }),
+  });
+}
+
+/** Discard with an optional answer note — empty/absent note stores null. */
+export function useDiscard() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, note }: { itemId: string; note?: string }) =>
+      apiFetch<InboxItem>(`/inbox/${itemId}/discard`, {
+        method: 'POST',
+        body: JSON.stringify(note !== undefined ? { note } : {}),
+      }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['inbox'] }),
   });
 }
