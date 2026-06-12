@@ -37,3 +37,12 @@ http://localhost:3001 — **`tsx watch`** (hot-reloads server code; plain tsx wa
 ## Process notes (for fresh sessions)
 
 Workflow: grill-with-docs → record decisions in new_features.md → plan → subagent-per-task with spec+quality reviews → PR. Classifier blocks: master pushes, `.env*` writes, remote-branch deletion, skip-permissions loops. Never mutate as seeded huy/lea (achievement pollution). CONTEXT.md = domain language; v1 plan Rules 1–11 binding for workers. `current_tasks.md` is an obsolete early handoff.
+
+## Deployment — HEROKU IS PRIMARY (2026-06-12, supersedes the Tailscale section above)
+
+- **Live at https://habits-app-42e80a35d720.herokuapp.com** — Heroku app `habits-app` (eu region), deployed from master via Node buildpack: root `build` script compiles both workspaces, `Procfile` release phase runs compiled migrate+seed (CWD=server), web dyno runs `server/dist/index.js`.
+- **Heroku Postgres** (Essential), `DATABASE_SSL=no-verify` config var enables its self-signed TLS; further config vars: `JWT_SECRET`, `SEED_PASSWORD`, `VAPID_*` (set 2026-06-12, release v5+). Local data migrated via `heroku pg:reset` + `pg:push`.
+- **Eco dyno sleeps after 30 min idle → reminder/nudge pushes don't fire while asleep.** Upgrade to Basic if push reliability starts to matter.
+- **Tailnet deploy decommissioned 2026-06-12**: `tailscale serve off`, `docker compose down` (volume `habits-app_postgres_data` kept as offline backup of the pre-migration state).
+- ⚠️ At migration time the public DB carried the weak tailnet passwords — huy/sasi change in-app, `lea` needs SQL reset or deletion.
+- Deploys: merge to master → `git push heroku master` (CLI logged in) or the dashboard Deploy tab.
