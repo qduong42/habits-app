@@ -4,7 +4,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../auth/middleware.js';
-import { parseBody, userIdOf, uuidParam } from '../validation.js';
+import { parseBody, tickNoteSchema, userIdOf, uuidParam } from '../validation.js';
 import { listHistory, setHistoryNote } from './service.js';
 
 // limit: default and hard cap 2000 (contract). Out-of-range → standard 400
@@ -12,9 +12,6 @@ import { listHistory, setHistoryNote } from './service.js';
 const querySchema = z.object({
   limit: z.coerce.number().int().min(1).max(2000).default(2000),
 });
-
-// Same rules as the row-chip endpoints: trimmed, ≤2000, empty clears.
-const noteSchema = z.object({ note: z.string().trim().max(2000) });
 
 export const historyRouter = Router();
 
@@ -26,7 +23,7 @@ historyRouter.get('/', async (req, res) => {
 });
 
 historyRouter.put('/:id/note', async (req, res) => {
-  const { note } = parseBody(noteSchema, req.body);
+  const { note } = parseBody(tickNoteSchema, req.body);
   const entryId = uuidParam(req.params.id, 'History entry not found');
-  res.json(await setHistoryNote(userIdOf(req), entryId, note === '' ? null : note));
+  res.json(await setHistoryNote(userIdOf(req), entryId, note));
 });

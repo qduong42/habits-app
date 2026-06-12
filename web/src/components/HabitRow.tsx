@@ -4,6 +4,7 @@
 // (count shows e.g. 2/1; the server never capped this, only same-day dups).
 
 import type { Habit } from '../types';
+import NameToggle from './NameToggle';
 import TickNote from './TickNote';
 
 interface HabitRowProps {
@@ -45,18 +46,12 @@ export default function HabitRow({
         {habit.doneToday ? '✓' : ''}
       </button>
       <div className="habit-main">
-        {habit.doneToday ? (
-          <button
-            type="button"
-            className="habit-name habit-name-toggle"
-            aria-expanded={noteOpen}
-            onClick={onNoteToggle}
-          >
-            {habit.name}
-          </button>
-        ) : (
-          <div className="habit-name">{habit.name}</div>
-        )}
+        <NameToggle
+          name={habit.name}
+          done={habit.doneToday}
+          noteOpen={noteOpen}
+          onToggle={onNoteToggle}
+        />
         {habit.frequencyType === 'weekly' && (
           <div className="habit-week">
             {habit.weekCount}/{habit.weeklyTarget} this week

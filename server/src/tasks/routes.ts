@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../auth/middleware.js';
-import { parseBody, userIdOf, uuidParam } from '../validation.js';
+import { parseBody, tickNoteSchema, userIdOf, uuidParam } from '../validation.js';
 import {
   completeTask,
   createTask,
@@ -11,10 +11,6 @@ import {
   undoCompleteTask,
   updateTask,
 } from './service.js';
-
-// Tick note ("+ note" chip): required string, trimmed, ≤2000 like discard
-// notes; empty clears to null.
-const completionNoteSchema = z.object({ note: z.string().trim().max(2000) });
 
 const nameSchema = z.string().trim().min(1).max(200);
 const notesSchema = z.string().max(5000);
@@ -89,8 +85,6 @@ tasksRouter.delete('/:id/complete', async (req, res) => {
 });
 
 tasksRouter.put('/:id/completion-note', async (req, res) => {
-  const { note } = parseBody(completionNoteSchema, req.body);
-  res.json(
-    await setCompletionNote(userIdOf(req), taskId(req.params.id), note === '' ? null : note),
-  );
+  const { note } = parseBody(tickNoteSchema, req.body);
+  res.json(await setCompletionNote(userIdOf(req), taskId(req.params.id), note));
 });

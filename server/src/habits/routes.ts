@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../auth/middleware.js';
-import { parseBody, userIdOf, uuidParam } from '../validation.js';
+import { parseBody, tickNoteSchema, userIdOf, uuidParam } from '../validation.js';
 import {
   archiveHabit,
   checkinHabit,
@@ -14,10 +14,6 @@ import {
 } from './service.js';
 
 const weeklyTargetSchema = z.number().int().min(1).max(7);
-
-// Tick note ("+ note" chip): required string, trimmed, ≤2000 like discard
-// notes; empty clears to null.
-const checkinNoteSchema = z.object({ note: z.string().trim().max(2000) });
 
 const createSchema = z
   .object({
@@ -90,6 +86,6 @@ habitsRouter.delete('/:id/checkin', async (req, res) => {
 });
 
 habitsRouter.put('/:id/checkin-note', async (req, res) => {
-  const { note } = parseBody(checkinNoteSchema, req.body);
-  res.json(await setCheckinNote(userIdOf(req), habitId(req.params.id), note === '' ? null : note));
+  const { note } = parseBody(tickNoteSchema, req.body);
+  res.json(await setCheckinNote(userIdOf(req), habitId(req.params.id), note));
 });
