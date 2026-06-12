@@ -10,6 +10,7 @@ import { and, desc, eq, isNotNull } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { checkins, habits, taskCompletions, tasks, users } from '../db/schema.js';
 import { localDateFor } from '../game/dates.js';
+import { HttpError } from '../errors.js';
 
 export interface HistoryEntry {
   id: string;
@@ -97,4 +98,40 @@ export async function listHistory(userId: string, limit: number): Promise<Histor
       createdAt: createdAt.toISOString(),
       note,
     }));
+}
+
+/**
+ * Set/edit/clear the note on ANY of the caller's history entries by entry id
+ * (the History UI's expanded editor — unlike the today-only row endpoints).
+ * The id is resolved across the three sources in order; ownership rides on
+ * each table's userId. One-off entry ids are task ids and require a recorded
+ * completion. No match anywhere → 404.
+ */
+export async function setHistoryNote(
+  userId: string,
+  entryId: string,
+  note: string | null,
+): Promise<{ note: string | null }> {
+  const checkinHit = await db
+    .update(checkins)
+    .set({ note })
+    .where(and(eq(checkins.id, entryId), eq(checkins.userId, userId)))
+    .returning({ note: checkins.note });
+  if (checkinHit.length > 0) return { note: checkinHit[0]!.note };
+
+  const completionHit = await db
+    .update(taskCompletions)
+    .set({ note })
+    .where(and(eq(taskCompletions.id, entryId), eq(taskCompletions.userId, userId)))
+    .returning({ note: taskCompletions.note });
+  if (completionHit.length > 0) return { note: completionHit[0]!.note };
+
+  const oneOffHit = await db
+    .update(tasks)
+    .set({ completionNote: note })
+    .where(and(eq(tasks.id, entryId), eq(tasks.userId, userId), isNotNull(tasks.completedAt)))
+    .returning({ note: tasks.completionNote });
+  if (oneOffHit.length > 0) return { note: oneOffHit[0]!.note };
+
+  throw new HttpError(404, 'nothing_to_note', 'History entry not found');
 }

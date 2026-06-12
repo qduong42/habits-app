@@ -123,3 +123,13 @@ An optional note on today's tick — "Strength ✓ — climbing 1 hr".
 - Storage: `checkins.note`, `task_completions.note` (recurring), `tasks.completion_note` (one-offs — no completion row exists; cleared by undo so a re-complete starts clean). Migration 0010.
 - API: `PUT /habits/:id/checkin-note`, `PUT /tasks/:id/completion-note` — idempotent set/edit/clear against TODAY's tick only (404 `nothing_to_note` otherwise). Contracts gain `todayNote`; Done History entries gain `note` (shown italic under the row).
 - XP, streaks, day-complete bonus: untouched — a note is annotation, not action.
+
+## 2026-06-12 — Done History: collapsible entries + note editing (decided in chat, shipped same day)
+
+History entries are now tappable: collapsed shows just `✅ Strength · 17:42`; tapping the activity expands it, revealing the note — and the note is editable right there, for ANY past entry (not just today's).
+
+**Decisions:**
+- Notes in History are hidden until the entry is expanded (per-entry toggle, same latch pattern as the date rows).
+- New `PUT /api/history/:id/note` resolves the entry id across all three sources (checkin / completion row / one-off task with a recorded completion); ownership per-table userId; 404 `nothing_to_note` otherwise. Same note rules as the row chips (trimmed, ≤2000, empty clears).
+- The today-only row-chip endpoints stay — the history endpoint is the any-day superset.
+- Reuses the TickNote component for the expanded editor.
