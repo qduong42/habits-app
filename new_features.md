@@ -142,3 +142,14 @@ Done rows on Today now mirror the History pattern: collapsed shows just the stru
 - **Ticking auto-expands the chip for 30 seconds** — the "write it while it's fresh" window — then it collapses on its own.
 - A **manual** tap (on the name, or into the editor) is sticky: it cancels the auto-collapse and stays open until tapped closed. Opening the editor inside the auto window also cancels the timer (no draft loss at second 30).
 - Undo collapses the chip immediately.
+
+## 2026-06-12 — Households / shared Tasks, a.k.a. v2 (NOT grilled yet, NOT implemented)
+
+The CONTEXT.md "personal-only v1" boundary's other half. Analysis from the 2026-06-12 session: **households + shared Tasks would fully subsume the old reminder-app** — its recurrence model is identical (interval hours, next deadline = completion + interval), so the task core is already here.
+
+**The real work package (not the task model):**
+- Membership machinery: households, invite tokens, pending/active members, access rules, lifecycle cascades (the reminder-app repo has ADRs + CONTEXT.md for all of this — steal liberally).
+- Notification fan-out: a shared task's reminder/deadline notifies all active members, not one owner.
+- Identity layer (open registration, email, password reset): **skippable while it's just huy+sasi** — manually seeded accounts get 80% of the value.
+
+**Open design question for the grill session:** does completing a shared Task grant the completer the +5 XP? Shared tasks + one XP economy = a chore race between household members — decide deliberately (feature or fight).
