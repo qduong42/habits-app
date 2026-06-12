@@ -7,14 +7,14 @@ import { ACHIEVEMENT_CATALOG } from '../game/achievements.js';
 const password = process.env.SEED_PASSWORD ?? 'changeme123';
 const passwordHash = await bcrypt.hash(password, 10);
 
-for (const name of ['huy', 'lea']) {
+for (const name of ['huy', 'lea', 'sasi']) {
   await db
     .insert(users)
     .values({ name, passwordHash })
     .onConflictDoNothing({ target: users.name });
 }
 
-console.log('seeded users: huy, lea');
+console.log('seeded users: huy, lea, sasi');
 
 // Builtin preset categories (userId null). The categories table has no unique
 // constraint on name, so idempotency is explicit: only insert each builtin if
