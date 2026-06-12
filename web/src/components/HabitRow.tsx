@@ -1,6 +1,7 @@
 // One habit row: round check circle, name, weekly progress line, streak
 // flame, ⋯ menu. Weekly habits whose target is met but weren't done today
-// render in the done style with the circle disabled.
+// render in the done style but stay clickable — over-completion is allowed
+// (count shows e.g. 2/1; the server never capped this, only same-day dups).
 
 import type { Habit } from '../types';
 
@@ -16,7 +17,6 @@ export default function HabitRow({ habit, onToggle, onMenu }: HabitRowProps) {
     habit.weeklyTarget !== null &&
     habit.weekCount >= habit.weeklyTarget;
   const doneStyle = habit.doneToday || weeklyMet;
-  const circleDisabled = weeklyMet && !habit.doneToday;
 
   return (
     <div className={'habit-row' + (doneStyle ? ' habit-row-done' : '')}>
@@ -25,7 +25,6 @@ export default function HabitRow({ habit, onToggle, onMenu }: HabitRowProps) {
         role="checkbox"
         aria-checked={habit.doneToday}
         className={'check-circle' + (habit.doneToday ? ' check-circle-done' : '')}
-        disabled={circleDisabled}
         aria-label={habit.doneToday ? `Uncheck ${habit.name}` : `Check off ${habit.name}`}
         onClick={() => onToggle(habit, !habit.doneToday)}
       >

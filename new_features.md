@@ -103,3 +103,12 @@ A one-off Task can carry a "look at this again" date — a **Reminder** that fir
 - Existing JWTs stay valid after a change (no session invalidation in v1 — noted, not a goal for a tailnet-only app).
 
 **Shipped in v1.2-night, 2026-06-11** (branch `feat/v1.2-night`; smoke-verified full round-trip — old password rejected, new accepted).
+
+## 2026-06-12 — Habit over-completion (decided in chat, shipped same day)
+
+A weekly Habit whose target is met stays **clickable** on later days: the row keeps its done style (strikethrough), the circle works again, and the count overshoots ("2/1 this week").
+
+**Decisions:**
+- Web-only change: the cap was purely the client's disabled circle — the server never rejected over-target check-ins (only same-day duplicates, which still 409).
+- Extra Check-ins earn the normal **+10 XP** (existing server path, unchanged); streak math (weeks meeting target) and the day-complete bonus are unaffected by overshoot.
+- Daily habits unchanged: one Check-in per Local Date remains a DB constraint.
