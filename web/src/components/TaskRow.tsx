@@ -8,6 +8,7 @@
 
 import { formatDumpDate } from '../format';
 import type { TaskGroup, TaskItem } from '../types';
+import NameToggle from './NameToggle';
 import TickNote from './TickNote';
 
 /** "every 12h" / "every 5d" — whole days collapse to the day form. */
@@ -65,18 +66,7 @@ export default function TaskRow({
         </button>
       )}
       <div className="habit-main">
-        {done ? (
-          <button
-            type="button"
-            className="habit-name habit-name-toggle"
-            aria-expanded={noteOpen}
-            onClick={onNoteToggle}
-          >
-            {task.name}
-          </button>
-        ) : (
-          <div className="habit-name">{task.name}</div>
-        )}
+        <NameToggle name={task.name} done={done} noteOpen={noteOpen} onToggle={onNoteToggle} />
         {done && noteOpen && (
           <TickNote
             note={task.todayNote}

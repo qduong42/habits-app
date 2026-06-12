@@ -436,9 +436,9 @@ export async function setCompletionNote(
   taskId: string,
   note: string | null,
 ): Promise<{ note: string | null }> {
-  const tz = await userTz(userId);
+  // Independent lookups — one round trip instead of two.
+  const [tz, task] = await Promise.all([userTz(userId), ownedTask(db, userId, taskId)]);
   const today = localDateFor(tz);
-  const task = await ownedTask(db, userId, taskId);
   const nothingToNote = () => new HttpError(404, 'nothing_to_note', 'No completion today to note');
 
   if (task.intervalHours !== null) {

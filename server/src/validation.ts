@@ -37,3 +37,17 @@ export function uuidParam(raw: string, notFoundMessage: string): string {
 export function userIdOf(req: unknown): string {
   return (req as AuthedRequest).userId;
 }
+
+/**
+ * Tick-note body, shared by all three note endpoints (habit check-in, task
+ * completion, history entry): trimmed, ≤2000 like discard notes, and the
+ * empty string normalizes to null ("clear the note") right here so no route
+ * repeats the ternary.
+ */
+export const tickNoteSchema = z.object({
+  note: z
+    .string()
+    .trim()
+    .max(2000)
+    .transform((v) => (v === '' ? null : v)),
+});
