@@ -213,3 +213,91 @@ describe('task completion notes', () => {
     expect(res.body.entries[0]).toMatchObject({ kind: 'completion', note: null });
   });
 });
+
+describe('history notes (PUT /api/history/:id/note)', () => {
+  it('notes any entry by id — yesterday’s check-in, a recurring completion, a one-off', async () => {
+    const u = await makeUser();
+    const habitId = await makeHabit(u);
+    // Yesterday's check-in seeded directly (the today-only endpoints can't reach it).
+    const [yesterdayCheckin] = await db
+      .insert(checkins)
+      .values({ habitId, userId: u.id, localDate: '2026-01-05', createdAt: new Date('2026-01-05T10:00:00Z') })
+      .returning();
+
+    let res = await request(app)
+      .put(`/api/history/${yesterdayCheckin!.id}/note`)
+      .set('Cookie', u.cookie)
+      .send({ note: 'forgot to log it' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ note: 'forgot to log it' });
+
+    res = await request(app).get('/api/history').set('Cookie', u.cookie);
+    const entry = res.body.entries.find((e: { id: string }) => e.id === yesterdayCheckin!.id);
+    expect(entry.note).toBe('forgot to log it');
+
+    // Recurring completion entry id = completion row id.
+    const created = await request(app)
+      .post('/api/tasks')
+      .set('Cookie', u.cookie)
+      .send({ name: 'Water plants', intervalHours: 24 });
+    await request(app).post(`/api/tasks/${created.body.id}/complete`).set('Cookie', u.cookie);
+    res = await request(app).get('/api/history').set('Cookie', u.cookie);
+    const completionEntry = res.body.entries.find(
+      (e: { kind: string; name: string }) => e.kind === 'completion' && e.name === 'Water plants',
+    );
+    await request(app)
+      .put(`/api/history/${completionEntry.id}/note`)
+      .set('Cookie', u.cookie)
+      .send({ note: 'big can' })
+      .expect(200);
+
+    // One-off entry id = task id; empty note clears.
+    const oneOff = await request(app)
+      .post('/api/tasks')
+      .set('Cookie', u.cookie)
+      .send({ name: 'File taxes' });
+    await request(app).post(`/api/tasks/${oneOff.body.id}/complete`).set('Cookie', u.cookie);
+    await request(app)
+      .put(`/api/history/${oneOff.body.id}/note`)
+      .set('Cookie', u.cookie)
+      .send({ note: 'at the bank' })
+      .expect(200);
+    res = await request(app)
+      .put(`/api/history/${oneOff.body.id}/note`)
+      .set('Cookie', u.cookie)
+      .send({ note: '' });
+    expect(res.body).toEqual({ note: null });
+  });
+
+  it('404s for foreign entries, unknown ids, and a never-completed one-off task id', async () => {
+    const u = await makeUser();
+    const habitId = await makeHabit(u);
+    await request(app).post(`/api/habits/${habitId}/checkin`).set('Cookie', u.cookie);
+    const res = await request(app).get('/api/history').set('Cookie', u.cookie);
+    const entryId = res.body.entries[0].id;
+
+    const stranger = await makeUser();
+    await request(app)
+      .put(`/api/history/${entryId}/note`)
+      .set('Cookie', stranger.cookie)
+      .send({ note: 'not mine' })
+      .expect(404);
+
+    await request(app)
+      .put('/api/history/00000000-0000-0000-0000-000000000000/note')
+      .set('Cookie', u.cookie)
+      .send({ note: 'x' })
+      .expect(404);
+
+    // A one-off that was never completed has no history entry to note.
+    const oneOff = await request(app)
+      .post('/api/tasks')
+      .set('Cookie', u.cookie)
+      .send({ name: 'Not done yet' });
+    await request(app)
+      .put(`/api/history/${oneOff.body.id}/note`)
+      .set('Cookie', u.cookie)
+      .send({ note: 'x' })
+      .expect(404);
+  });
+});

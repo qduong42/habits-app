@@ -1847,3 +1847,14 @@ body {
   font-style: italic;
   margin-left: 22px;
 }
+
+/* Done History: tappable entries; note editor only when expanded */
+.done-history-entry-toggle {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}

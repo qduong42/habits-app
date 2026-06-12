@@ -14,6 +14,7 @@ import HabitForm from '../components/HabitForm';
 import HabitRow from '../components/HabitRow';
 import TaskForm from '../components/TaskForm';
 import TaskRow from '../components/TaskRow';
+import TickNote from '../components/TickNote';
 import Toast from '../components/Toast';
 import XpBar from '../components/XpBar';
 import { formatTime } from '../format';
@@ -24,7 +25,7 @@ import {
   useHabits,
   useSetCheckinNote,
 } from '../hooks/useHabits';
-import { useHistory } from '../hooks/useHistory';
+import { useHistory, useSetHistoryNote } from '../hooks/useHistory';
 import { useCompleteTask, useDeleteTask, useSetCompletionNote, useTasks } from '../hooks/useTasks';
 import type { Category, Habit, HistoryEntry, TaskItem } from '../types';
 
@@ -105,6 +106,10 @@ export default function Today() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyRequested, setHistoryRequested] = useState(false);
   const [openHistoryDates, setOpenHistoryDates] = useState<ReadonlySet<string>>(new Set());
+  // Per-entry expansion: the note (and its editor) only show when an
+  // activity row is tapped open.
+  const [openHistoryEntries, setOpenHistoryEntries] = useState<ReadonlySet<string>>(new Set());
+  const setHistoryNote = useSetHistoryNote();
   const history = useHistory(historyRequested);
 
   // Entries grouped by the server's localDate (user-TZ correct — NOT
@@ -204,6 +209,15 @@ export default function Today() {
   function toggleHistory() {
     setHistoryOpen((open) => !open);
     setHistoryRequested(true); // latch — fires the lazy /history query once
+  }
+
+  function toggleHistoryEntry(id: string) {
+    setOpenHistoryEntries((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   function toggleHistoryDate(key: string) {
@@ -363,10 +377,25 @@ export default function Today() {
                     <ul className="done-history-items">
                       {group.map((entry) => (
                         <li key={entry.id} className="done-history-item">
-                          {entry.kind === 'checkin' ? '✅' : '📦'} {entry.name}
-                          <span className="done-history-time"> · {formatTime(entry.createdAt)}</span>
-                          {entry.note !== null && (
-                            <div className="done-history-note">{entry.note}</div>
+                          <button
+                            type="button"
+                            className="done-history-entry-toggle"
+                            aria-expanded={openHistoryEntries.has(entry.id)}
+                            onClick={() => toggleHistoryEntry(entry.id)}
+                          >
+                            {entry.kind === 'checkin' ? '✅' : '📦'} {entry.name}
+                            <span className="done-history-time">
+                              {' '}
+                              · {formatTime(entry.createdAt)}
+                            </span>
+                          </button>
+                          {openHistoryEntries.has(entry.id) && (
+                            <div className="done-history-note">
+                              <TickNote
+                                note={entry.note}
+                                onSave={(note) => setHistoryNote.mutate({ entryId: entry.id, note })}
+                              />
+                            </div>
                           )}
                         </li>
                       ))}
