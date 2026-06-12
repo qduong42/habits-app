@@ -28,9 +28,21 @@ interface TaskRowProps {
   onToggle: (task: TaskItem, done: boolean) => void;
   onMenu: (task: TaskItem) => void;
   onNote: (task: TaskItem, note: string) => void;
+  /** Note chip expanded? Collapsed rows show just the name (tap it to expand). */
+  noteOpen: boolean;
+  onNoteToggle: () => void;
+  onNoteInteract: () => void;
 }
 
-export default function TaskRow({ task, onToggle, onMenu, onNote }: TaskRowProps) {
+export default function TaskRow({
+  task,
+  onToggle,
+  onMenu,
+  onNote,
+  noteOpen,
+  onNoteToggle,
+  onNoteInteract,
+}: TaskRowProps) {
   const done = task.group === 'done';
   const scheduled = task.group === 'scheduled';
 
@@ -53,8 +65,25 @@ export default function TaskRow({ task, onToggle, onMenu, onNote }: TaskRowProps
         </button>
       )}
       <div className="habit-main">
-        <div className="habit-name">{task.name}</div>
-        {done && <TickNote note={task.todayNote} onSave={(n) => onNote(task, n)} />}
+        {done ? (
+          <button
+            type="button"
+            className="habit-name habit-name-toggle"
+            aria-expanded={noteOpen}
+            onClick={onNoteToggle}
+          >
+            {task.name}
+          </button>
+        ) : (
+          <div className="habit-name">{task.name}</div>
+        )}
+        {done && noteOpen && (
+          <TickNote
+            note={task.todayNote}
+            onSave={(n) => onNote(task, n)}
+            onEditStart={onNoteInteract}
+          />
+        )}
         {task.kind === 'recurring' && task.intervalHours !== null && (
           <div className="task-interval">🔁 {intervalHint(task.intervalHours)}</div>
         )}

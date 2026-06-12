@@ -5,7 +5,7 @@
 // floating + opening the capture sheet, ⋯ row menus. v1.2 adds the collapsed
 // Done History section at the very bottom (read-only, lazily fetched).
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError } from '../api';
 import ActionSheet from '../components/ActionSheet';
 import CaptureSheet from '../components/CaptureSheet';
@@ -110,6 +110,25 @@ export default function Today() {
   // activity row is tapped open.
   const [openHistoryEntries, setOpenHistoryEntries] = useState<ReadonlySet<string>>(new Set());
   const setHistoryNote = useSetHistoryNote();
+  // Today rows: the note chip is collapsed behind a tap on the activity name
+  // (same as History entries). A fresh tick auto-expands it for 30s — long
+  // enough to type "climbing 1 hr" — then it collapses on its own; a manual
+  // tap (on the name or into the editor) is sticky and cancels the timer.
+  const [openNoteRows, setOpenNoteRows] = useState<ReadonlySet<string>>(new Set());
+  const noteTimers = useRef(new Map<string, number>());
+
+  function cancelNoteTimer(id: string) {
+    const timer = noteTimers.current.get(id);
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+      noteTimers.current.delete(id);
+    }
+  }
+
+  useEffect(() => {
+    const timers = noteTimers.current;
+    return () => timers.forEach((t) => window.clearTimeout(t));
+  }, []);
   const history = useHistory(historyRequested);
 
   // Entries grouped by the server's localDate (user-TZ correct — NOT
@@ -157,8 +176,43 @@ export default function Today() {
     setActionError(err.message);
   }
 
+  function toggleNoteRow(id: string) {
+    cancelNoteTimer(id); // manual interaction is sticky
+    setOpenNoteRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  /** Fresh tick → auto-expand the note chip for 30s; undo → collapse. */
+  function autoNoteRow(id: string, done: boolean) {
+    cancelNoteTimer(id);
+    setOpenNoteRows((prev) => {
+      const next = new Set(prev);
+      if (done) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+    if (done) {
+      noteTimers.current.set(
+        id,
+        window.setTimeout(() => {
+          noteTimers.current.delete(id);
+          setOpenNoteRows((prev) => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+          });
+        }, 30_000),
+      );
+    }
+  }
+
   function handleToggle(habit: Habit, done: boolean) {
     setActionError(null);
+    autoNoteRow(habit.id, done);
     checkin.mutate(
       { habitId: habit.id, done },
       {
@@ -172,6 +226,7 @@ export default function Today() {
 
   function handleTaskToggle(task: TaskItem, done: boolean) {
     setActionError(null);
+    autoNoteRow(task.id, done);
     completeTask.mutate(
       { task, done },
       {
@@ -250,6 +305,9 @@ export default function Today() {
         onToggle={handleTaskToggle}
         onMenu={setMenuTask}
         onNote={(t, note) => setCompletionNote.mutate({ taskId: t.id, note })}
+        noteOpen={openNoteRows.has(task.id)}
+        onNoteToggle={() => toggleNoteRow(task.id)}
+        onNoteInteract={() => cancelNoteTimer(task.id)}
       />
       {toast?.rowId === task.id && <Toast key={toast.key} text={toast.text} onDone={clearToast} />}
     </div>
@@ -333,6 +391,9 @@ export default function Today() {
                       onToggle={handleToggle}
                       onMenu={setMenuHabit}
                       onNote={(h, note) => setCheckinNote.mutate({ habitId: h.id, note })}
+                      noteOpen={openNoteRows.has(habit.id)}
+                      onNoteToggle={() => toggleNoteRow(habit.id)}
+                      onNoteInteract={() => cancelNoteTimer(habit.id)}
                     />
                     {toast?.rowId === habit.id && (
                       <Toast key={toast.key} text={toast.text} onDone={clearToast} />

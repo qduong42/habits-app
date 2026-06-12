@@ -11,9 +11,21 @@ interface HabitRowProps {
   onToggle: (habit: Habit, done: boolean) => void;
   onMenu: (habit: Habit) => void;
   onNote: (habit: Habit, note: string) => void;
+  /** Note chip expanded? Collapsed rows show just the name (tap it to expand). */
+  noteOpen: boolean;
+  onNoteToggle: () => void;
+  onNoteInteract: () => void;
 }
 
-export default function HabitRow({ habit, onToggle, onMenu, onNote }: HabitRowProps) {
+export default function HabitRow({
+  habit,
+  onToggle,
+  onMenu,
+  onNote,
+  noteOpen,
+  onNoteToggle,
+  onNoteInteract,
+}: HabitRowProps) {
   const weeklyMet =
     habit.frequencyType === 'weekly' &&
     habit.weeklyTarget !== null &&
@@ -33,13 +45,30 @@ export default function HabitRow({ habit, onToggle, onMenu, onNote }: HabitRowPr
         {habit.doneToday ? '✓' : ''}
       </button>
       <div className="habit-main">
-        <div className="habit-name">{habit.name}</div>
+        {habit.doneToday ? (
+          <button
+            type="button"
+            className="habit-name habit-name-toggle"
+            aria-expanded={noteOpen}
+            onClick={onNoteToggle}
+          >
+            {habit.name}
+          </button>
+        ) : (
+          <div className="habit-name">{habit.name}</div>
+        )}
         {habit.frequencyType === 'weekly' && (
           <div className="habit-week">
             {habit.weekCount}/{habit.weeklyTarget} this week
           </div>
         )}
-        {habit.doneToday && <TickNote note={habit.todayNote} onSave={(n) => onNote(habit, n)} />}
+        {habit.doneToday && noteOpen && (
+          <TickNote
+            note={habit.todayNote}
+            onSave={(n) => onNote(habit, n)}
+            onEditStart={onNoteInteract}
+          />
+        )}
       </div>
       {habit.streak > 0 && (
         <span className="habit-streak" aria-label={`${habit.streak} day streak`}>
