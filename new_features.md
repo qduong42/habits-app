@@ -112,3 +112,14 @@ A weekly Habit whose target is met stays **clickable** on later days: the row ke
 - Web-only change: the cap was purely the client's disabled circle — the server never rejected over-target check-ins (only same-day duplicates, which still 409).
 - Extra Check-ins earn the normal **+10 XP** (existing server path, unchanged); streak math (weeks meeting target) and the day-complete bonus are unaffected by overshoot.
 - Daily habits unchanged: one Check-in per Local Date remains a DB constraint.
+
+## 2026-06-12 — Tick notes on Habits and Tasks (grilled, shipped same day)
+
+An optional note on today's tick — "Strength ✓ — climbing 1 hr".
+
+**Decisions (grilled):**
+- **Capture UX: after-tick "+ note" chip** (chosen over a per-tick prompt or a ⋯ menu item): the tick stays instant; the just-done row grows a small "+ note" chip (existing note shows as italic text, tappable to edit). Same-day window, mirroring undo.
+- Input behavior mirrors the discard-note: Enter saves, Esc cancels, Enter on an emptied input clears; trimmed, ≤2000.
+- Storage: `checkins.note`, `task_completions.note` (recurring), `tasks.completion_note` (one-offs — no completion row exists; cleared by undo so a re-complete starts clean). Migration 0010.
+- API: `PUT /habits/:id/checkin-note`, `PUT /tasks/:id/completion-note` — idempotent set/edit/clear against TODAY's tick only (404 `nothing_to_note` otherwise). Contracts gain `todayNote`; Done History entries gain `note` (shown italic under the row).
+- XP, streaks, day-complete bonus: untouched — a note is annotation, not action.

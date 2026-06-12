@@ -7,9 +7,14 @@ import {
   createTask,
   deleteTask,
   listTasks,
+  setCompletionNote,
   undoCompleteTask,
   updateTask,
 } from './service.js';
+
+// Tick note ("+ note" chip): required string, trimmed, ≤2000 like discard
+// notes; empty clears to null.
+const completionNoteSchema = z.object({ note: z.string().trim().max(2000) });
 
 const nameSchema = z.string().trim().min(1).max(200);
 const notesSchema = z.string().max(5000);
@@ -81,4 +86,11 @@ tasksRouter.post('/:id/complete', async (req, res) => {
 
 tasksRouter.delete('/:id/complete', async (req, res) => {
   res.json(await undoCompleteTask(userIdOf(req), taskId(req.params.id)));
+});
+
+tasksRouter.put('/:id/completion-note', async (req, res) => {
+  const { note } = parseBody(completionNoteSchema, req.body);
+  res.json(
+    await setCompletionNote(userIdOf(req), taskId(req.params.id), note === '' ? null : note),
+  );
 });

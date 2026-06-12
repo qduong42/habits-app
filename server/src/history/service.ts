@@ -17,6 +17,8 @@ export interface HistoryEntry {
   name: string;
   localDate: string;
   createdAt: string; // ISO
+  /** Optional tick note ("climbing 1 hr"). */
+  note: string | null;
 }
 
 /**
@@ -37,6 +39,7 @@ export async function listHistory(userId: string, limit: number): Promise<Histor
         name: habits.name,
         localDate: checkins.localDate,
         createdAt: checkins.createdAt,
+        note: checkins.note,
       })
       .from(checkins)
       .innerJoin(habits, eq(checkins.habitId, habits.id))
@@ -49,6 +52,7 @@ export async function listHistory(userId: string, limit: number): Promise<Histor
         name: tasks.name,
         localDate: taskCompletions.localDate,
         createdAt: taskCompletions.createdAt,
+        note: taskCompletions.note,
       })
       .from(taskCompletions)
       .innerJoin(tasks, eq(taskCompletions.taskId, tasks.id))
@@ -60,6 +64,7 @@ export async function listHistory(userId: string, limit: number): Promise<Histor
         id: tasks.id,
         name: tasks.name,
         completedAt: tasks.completedAt,
+        note: tasks.completionNote,
       })
       .from(tasks)
       .where(and(eq(tasks.userId, userId), isNotNull(tasks.completedAt)))
@@ -78,16 +83,18 @@ export async function listHistory(userId: string, limit: number): Promise<Histor
       name: r.name,
       localDate: localDateFor(tz, r.completedAt!),
       createdAt: r.completedAt!,
+      note: r.note,
       kind: 'completion' as const,
     })),
   ]
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     .slice(0, limit)
-    .map(({ id, kind, name, localDate, createdAt }) => ({
+    .map(({ id, kind, name, localDate, createdAt, note }) => ({
       id,
       kind,
       name,
       localDate,
       createdAt: createdAt.toISOString(),
+      note,
     }));
 }

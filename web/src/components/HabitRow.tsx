@@ -4,14 +4,16 @@
 // (count shows e.g. 2/1; the server never capped this, only same-day dups).
 
 import type { Habit } from '../types';
+import TickNote from './TickNote';
 
 interface HabitRowProps {
   habit: Habit;
   onToggle: (habit: Habit, done: boolean) => void;
   onMenu: (habit: Habit) => void;
+  onNote: (habit: Habit, note: string) => void;
 }
 
-export default function HabitRow({ habit, onToggle, onMenu }: HabitRowProps) {
+export default function HabitRow({ habit, onToggle, onMenu, onNote }: HabitRowProps) {
   const weeklyMet =
     habit.frequencyType === 'weekly' &&
     habit.weeklyTarget !== null &&
@@ -37,6 +39,7 @@ export default function HabitRow({ habit, onToggle, onMenu }: HabitRowProps) {
             {habit.weekCount}/{habit.weeklyTarget} this week
           </div>
         )}
+        {habit.doneToday && <TickNote note={habit.todayNote} onSave={(n) => onNote(habit, n)} />}
       </div>
       {habit.streak > 0 && (
         <span className="habit-streak" aria-label={`${habit.streak} day streak`}>

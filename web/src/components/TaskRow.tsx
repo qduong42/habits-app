@@ -8,6 +8,7 @@
 
 import { formatDumpDate } from '../format';
 import type { TaskGroup, TaskItem } from '../types';
+import TickNote from './TickNote';
 
 /** "every 12h" / "every 5d" — whole days collapse to the day form. */
 function intervalHint(intervalHours: number): string {
@@ -26,9 +27,10 @@ interface TaskRowProps {
   task: TaskItem;
   onToggle: (task: TaskItem, done: boolean) => void;
   onMenu: (task: TaskItem) => void;
+  onNote: (task: TaskItem, note: string) => void;
 }
 
-export default function TaskRow({ task, onToggle, onMenu }: TaskRowProps) {
+export default function TaskRow({ task, onToggle, onMenu, onNote }: TaskRowProps) {
   const done = task.group === 'done';
   const scheduled = task.group === 'scheduled';
 
@@ -52,6 +54,7 @@ export default function TaskRow({ task, onToggle, onMenu }: TaskRowProps) {
       )}
       <div className="habit-main">
         <div className="habit-name">{task.name}</div>
+        {done && <TickNote note={task.todayNote} onSave={(n) => onNote(task, n)} />}
         {task.kind === 'recurring' && task.intervalHours !== null && (
           <div className="task-interval">🔁 {intervalHint(task.intervalHours)}</div>
         )}

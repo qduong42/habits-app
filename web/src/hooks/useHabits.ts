@@ -122,3 +122,19 @@ export function useCreateCategory() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['categories'] }),
   });
 }
+
+/** PUT /habits/:id/checkin-note — set/edit/clear today's tick note. */
+export function useSetCheckinNote() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ habitId, note }: { habitId: string; note: string }) =>
+      apiFetch<{ note: string | null }>(`/habits/${habitId}/checkin-note`, {
+        method: 'PUT',
+        body: JSON.stringify({ note }),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['habits'] });
+      void queryClient.invalidateQueries({ queryKey: ['history'] });
+    },
+  });
+}

@@ -135,6 +135,7 @@ describe('POST /api/tasks', () => {
       nextDue: null,
       remindAt: null,
       remindedAt: null,
+      todayNote: null,
     });
   });
 

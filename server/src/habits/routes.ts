@@ -8,11 +8,16 @@ import {
   createHabit,
   deleteHabit,
   listHabits,
+  setCheckinNote,
   undoCheckin,
   updateHabit,
 } from './service.js';
 
 const weeklyTargetSchema = z.number().int().min(1).max(7);
+
+// Tick note ("+ note" chip): required string, trimmed, ≤2000 like discard
+// notes; empty clears to null.
+const checkinNoteSchema = z.object({ note: z.string().trim().max(2000) });
 
 const createSchema = z
   .object({
@@ -82,4 +87,9 @@ habitsRouter.post('/:id/checkin', async (req, res) => {
 habitsRouter.delete('/:id/checkin', async (req, res) => {
   // {ok, xpLost, xpTotal, level} — additive over the original {ok: true}
   res.json(await undoCheckin(userIdOf(req), habitId(req.params.id)));
+});
+
+habitsRouter.put('/:id/checkin-note', async (req, res) => {
+  const { note } = parseBody(checkinNoteSchema, req.body);
+  res.json(await setCheckinNote(userIdOf(req), habitId(req.params.id), note === '' ? null : note));
 });
