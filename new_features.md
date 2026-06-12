@@ -133,3 +133,12 @@ History entries are now tappable: collapsed shows just `✅ Strength · 17:42`; 
 - New `PUT /api/history/:id/note` resolves the entry id across all three sources (checkin / completion row / one-off task with a recorded completion); ownership per-table userId; 404 `nothing_to_note` otherwise. Same note rules as the row chips (trimmed, ≤2000, empty clears).
 - The today-only row-chip endpoints stay — the history endpoint is the any-day superset.
 - Reuses the TickNote component for the expanded editor.
+
+## 2026-06-12 — Today rows: collapsed note chip, 30s auto-expand on tick (decided in chat)
+
+Done rows on Today now mirror the History pattern: collapsed shows just the struck-through name; tapping the activity name toggles the note chip/editor.
+
+**Decisions:**
+- **Ticking auto-expands the chip for 30 seconds** — the "write it while it's fresh" window — then it collapses on its own.
+- A **manual** tap (on the name, or into the editor) is sticky: it cancels the auto-collapse and stays open until tapped closed. Opening the editor inside the auto window also cancels the timer (no draft loss at second 30).
+- Undo collapses the chip immediately.

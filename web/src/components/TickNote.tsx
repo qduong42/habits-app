@@ -8,9 +8,11 @@ interface TickNoteProps {
   note: string | null;
   /** Receives the trimmed note; '' means clear. */
   onSave: (note: string) => void;
+  /** Fired when the editor opens (Today rows cancel their auto-collapse). */
+  onEditStart?: () => void;
 }
 
-export default function TickNote({ note, onSave }: TickNoteProps) {
+export default function TickNote({ note, onSave, onEditStart }: TickNoteProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
 
@@ -42,6 +44,7 @@ export default function TickNote({ note, onSave }: TickNoteProps) {
       className={'tick-note' + (note === null ? ' tick-note-empty' : '')}
       aria-label={note === null ? 'Add a note' : `Edit note: ${note}`}
       onClick={() => {
+        onEditStart?.();
         setDraft(note ?? '');
         setEditing(true);
       }}
