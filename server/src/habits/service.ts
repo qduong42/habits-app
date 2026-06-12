@@ -36,6 +36,8 @@ export interface HabitContract {
   doneToday: boolean;
   weekCount: number;
   streak: number;
+  /** Note on today's check-in ("climbing 1 hr"); null when unchecked or unnoted. */
+  todayNote: string | null;
 }
 
 export interface CreateHabitInput {
@@ -80,6 +82,7 @@ function toContract(
   category: Category,
   dates: Set<string>,
   today: string,
+  todayNote: string | null,
 ): HabitContract {
   const doneToday = dates.has(today);
   const currentWeek = isoWeekOf(today);
@@ -104,6 +107,7 @@ function toContract(
     doneToday,
     weekCount,
     streak,
+    todayNote: doneToday ? todayNote : null,
   };
 }
 
@@ -133,9 +137,10 @@ async function buildHabits(userId: string, habitId?: string, ex: DbOrTx = db) {
     .orderBy(habits.createdAt);
 
   const datesByHabit = new Map<string, Set<string>>();
+  const todayNoteByHabit = new Map<string, string | null>();
   if (rows.length > 0) {
     const checkinRows = await ex
-      .select({ habitId: checkins.habitId, localDate: checkins.localDate })
+      .select({ habitId: checkins.habitId, localDate: checkins.localDate, note: checkins.note })
       .from(checkins)
       .where(
         inArray(
@@ -147,13 +152,20 @@ async function buildHabits(userId: string, habitId?: string, ex: DbOrTx = db) {
       let set = datesByHabit.get(c.habitId);
       if (!set) datesByHabit.set(c.habitId, (set = new Set()));
       set.add(c.localDate);
+      if (c.localDate === today) todayNoteByHabit.set(c.habitId, c.note);
     }
   }
 
   return {
     today,
     habits: rows.map((r) =>
-      toContract(r.habit, r.category, datesByHabit.get(r.habit.id) ?? new Set(), today),
+      toContract(
+        r.habit,
+        r.category,
+        datesByHabit.get(r.habit.id) ?? new Set(),
+        today,
+        todayNoteByHabit.get(r.habit.id) ?? null,
+      ),
     ),
   };
 }
@@ -450,4 +462,32 @@ export async function deleteHabit(userId: string, habitId: string): Promise<void
     .where(and(eq(habits.id, habitId), eq(habits.userId, userId)))
     .returning({ id: habits.id });
   if (deleted.length === 0) throw notFound();
+}
+
+/**
+ * Set/edit/clear the note on TODAY's check-in (the "+ note" chip). Ownership
+ * rides on checkins.userId — a foreign or missing habit and a day without a
+ * check-in are the same 404: there is nothing to note.
+ */
+export async function setCheckinNote(
+  userId: string,
+  habitId: string,
+  note: string | null,
+): Promise<{ note: string | null }> {
+  const today = await todayFor(userId);
+  const updated = await db
+    .update(checkins)
+    .set({ note })
+    .where(
+      and(
+        eq(checkins.habitId, habitId),
+        eq(checkins.userId, userId),
+        eq(checkins.localDate, today),
+      ),
+    )
+    .returning({ note: checkins.note });
+  if (updated.length === 0) {
+    throw new HttpError(404, 'nothing_to_note', 'No check-in today to note');
+  }
+  return { note: updated[0]!.note };
 }

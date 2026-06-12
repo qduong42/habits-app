@@ -155,6 +155,7 @@ describe('GET /api/history', () => {
       name: 'Water plants',
       localDate: TODAY,
       createdAt: at(4).toISOString(),
+      note: null,
     });
     expect(res.body.entries[3]).toEqual({
       id: expect.any(String),
@@ -162,6 +163,7 @@ describe('GET /api/history', () => {
       name: 'Stretch',
       localDate: YESTERDAY,
       createdAt: at(1).toISOString(),
+      note: null,
     });
   });
 

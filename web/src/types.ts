@@ -23,6 +23,8 @@ export interface Habit {
   doneToday: boolean;
   weekCount: number;
   streak: number;
+  /** Note on today's check-in ("climbing 1 hr"); null when unchecked or unnoted. */
+  todayNote: string | null;
 }
 
 /** GET /habits */
@@ -113,6 +115,8 @@ export interface TaskItem {
   remindAt: string | null;
   /** Set when the reminder push fired; null while pending. */
   remindedAt: string | null;
+  /** Note on today's completion; null when not completed today or unnoted. */
+  todayNote: string | null;
 }
 
 /** GET /tasks(?all=1) → ordered overdue, today, undated, done(, scheduled). */
@@ -188,6 +192,8 @@ export interface HistoryEntry {
   /** YYYY-MM-DD in the user's timezone — group by this, NOT browser-local. */
   localDate: string;
   createdAt: string;
+  /** Optional tick note ("climbing 1 hr"). */
+  note: string | null;
 }
 
 /** GET /history?limit= (default + cap 2000) → newest createdAt first. */

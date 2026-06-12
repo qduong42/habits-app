@@ -22,9 +22,10 @@ import {
   useCheckin,
   useDeleteHabit,
   useHabits,
+  useSetCheckinNote,
 } from '../hooks/useHabits';
 import { useHistory } from '../hooks/useHistory';
-import { useCompleteTask, useDeleteTask, useTasks } from '../hooks/useTasks';
+import { useCompleteTask, useDeleteTask, useSetCompletionNote, useTasks } from '../hooks/useTasks';
 import type { Category, Habit, HistoryEntry, TaskItem } from '../types';
 
 /** XP chip anchored to the tapped habit/task row; `key` re-mounts on re-tap. */
@@ -80,9 +81,11 @@ export default function Today() {
   const { data, isPending, error } = useHabits();
   const tasksQuery = useTasks();
   const checkin = useCheckin();
+  const setCheckinNote = useSetCheckinNote();
   const archiveHabit = useArchiveHabit();
   const deleteHabit = useDeleteHabit();
   const completeTask = useCompleteTask();
+  const setCompletionNote = useSetCompletionNote();
   const deleteTask = useDeleteTask();
 
   const [formOpen, setFormOpen] = useState(false);
@@ -228,7 +231,12 @@ export default function Today() {
 
   const taskRow = (task: TaskItem) => (
     <div key={task.id} className="habit-row-wrap">
-      <TaskRow task={task} onToggle={handleTaskToggle} onMenu={setMenuTask} />
+      <TaskRow
+        task={task}
+        onToggle={handleTaskToggle}
+        onMenu={setMenuTask}
+        onNote={(t, note) => setCompletionNote.mutate({ taskId: t.id, note })}
+      />
       {toast?.rowId === task.id && <Toast key={toast.key} text={toast.text} onDone={clearToast} />}
     </div>
   );
@@ -306,7 +314,12 @@ export default function Today() {
                 </div>
                 {habits.map((habit) => (
                   <div key={habit.id} className="habit-row-wrap">
-                    <HabitRow habit={habit} onToggle={handleToggle} onMenu={setMenuHabit} />
+                    <HabitRow
+                      habit={habit}
+                      onToggle={handleToggle}
+                      onMenu={setMenuHabit}
+                      onNote={(h, note) => setCheckinNote.mutate({ habitId: h.id, note })}
+                    />
                     {toast?.rowId === habit.id && (
                       <Toast key={toast.key} text={toast.text} onDone={clearToast} />
                     )}
@@ -352,6 +365,9 @@ export default function Today() {
                         <li key={entry.id} className="done-history-item">
                           {entry.kind === 'checkin' ? '✅' : '📦'} {entry.name}
                           <span className="done-history-time"> · {formatTime(entry.createdAt)}</span>
+                          {entry.note !== null && (
+                            <div className="done-history-note">{entry.note}</div>
+                          )}
                         </li>
                       ))}
                     </ul>

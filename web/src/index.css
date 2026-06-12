@@ -1814,3 +1814,36 @@ body {
 .mega-section .cat-group:last-child {
   margin-bottom: 0;
 }
+
+/* Tick notes ("+ note" chip on done rows; note text in Done History) */
+.tick-note {
+  display: block;
+  border: none;
+  background: none;
+  padding: 0;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+  text-align: left;
+  cursor: pointer;
+}
+.tick-note-empty {
+  font-style: normal;
+  opacity: 0.6;
+}
+.tick-note-input {
+  display: block;
+  width: 100%;
+  margin-top: 2px;
+  font-size: 12px;
+  padding: 2px 6px;
+  border: 1px solid var(--border, #ccc);
+  border-radius: 6px;
+}
+.done-history-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-left: 22px;
+}

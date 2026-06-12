@@ -185,6 +185,7 @@ describe('habits routes', () => {
         doneToday: false,
         weekCount: 0,
         streak: 0,
+      todayNote: null,
       });
     });
 
@@ -207,6 +208,7 @@ describe('habits routes', () => {
         doneToday: false,
         weekCount: 0,
         streak: 0,
+      todayNote: null,
       });
     });
 
@@ -238,6 +240,7 @@ describe('habits routes', () => {
         doneToday: false,
         weekCount: 0,
         streak: 0,
+      todayNote: null,
       });
 
       const weekly = res.body.habits.find((h: { id: string }) => h.id === weeklyId);
@@ -248,6 +251,7 @@ describe('habits routes', () => {
         doneToday: false,
         weekCount: 0,
         streak: 0,
+      todayNote: null,
       });
     });
 

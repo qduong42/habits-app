@@ -35,6 +35,8 @@ export interface TaskItemContract {
   nextDue: string | null;
   remindAt: string | null;
   remindedAt: string | null;
+  /** Note on today's completion ("used the big can"); null when not completed today or unnoted. */
+  todayNote: string | null;
 }
 
 export interface CreateTaskInput {
@@ -75,6 +77,7 @@ function toContract(
   now: Date,
   today: string,
   tz: string,
+  latestCompletionNote: string | null = null,
 ): TaskItemContract {
   const kind = kindOf(task);
   const rawGroup = taskGroup(
@@ -114,6 +117,17 @@ function toContract(
     nextDue: task.nextDue ? task.nextDue.toISOString() : null,
     remindAt: task.remindAt ? task.remindAt.toISOString() : null,
     remindedAt: task.remindedAt ? task.remindedAt.toISOString() : null,
+    // Recurring: the latest completion's note, only while that completion is
+    // today's. One-off: the tasks-row note (undo clears it; past-day
+    // completed one-offs never reach a list).
+    todayNote:
+      kind === 'recurring'
+        ? latestCompletionLocalDate === today
+          ? latestCompletionNote
+          : null
+        : task.completedAt !== null
+          ? task.completionNote
+          : null,
   };
 }
 
@@ -193,16 +207,24 @@ export async function listTasks(
     .selectDistinctOn([taskCompletions.taskId], {
       taskId: taskCompletions.taskId,
       localDate: taskCompletions.localDate,
+      note: taskCompletions.note,
     })
     .from(taskCompletions)
     .where(eq(taskCompletions.userId, userId))
     .orderBy(taskCompletions.taskId, desc(taskCompletions.createdAt), desc(taskCompletions.id));
-  const latestLocalDateByTask = new Map(completionRows.map((c) => [c.taskId, c.localDate]));
+  const latestByTask = new Map(completionRows.map((c) => [c.taskId, c]));
 
   return rows
     .map((task) => ({
       task,
-      item: toContract(task, latestLocalDateByTask.get(task.id) ?? null, now, today, tz),
+      item: toContract(
+        task,
+        latestByTask.get(task.id)?.localDate ?? null,
+        now,
+        today,
+        tz,
+        latestByTask.get(task.id)?.note ?? null,
+      ),
     }))
     .filter(({ task, item }) => {
       // One-offs completed on a past day are terminal history — never listed
@@ -305,7 +327,7 @@ export async function updateTask(
     .where(eq(tasks.id, taskId))
     .returning();
   const latest = updated!.intervalHours !== null ? await latestCompletion(db, taskId) : null;
-  return toContract(updated!, latest?.localDate ?? null, now, localDateFor(tz, now), tz);
+  return toContract(updated!, latest?.localDate ?? null, now, localDateFor(tz, now), tz, latest?.note ?? null);
 }
 
 export async function deleteTask(userId: string, taskId: string): Promise<void> {
@@ -395,9 +417,48 @@ export async function undoCompleteTask(
       if (task.completedAt === null || localDateFor(user.timezone, task.completedAt) !== today) {
         throw nothingToUndo(); // never completed, or completed on a past day (terminal)
       }
-      await tx.update(tasks).set({ completedAt: null }).where(eq(tasks.id, taskId));
+      await tx.update(tasks).set({ completedAt: null, completionNote: null }).where(eq(tasks.id, taskId));
     }
 
     return chargeUndo(tx, userId, TASK_COMPLETION_XP);
   });
+}
+
+/**
+ * Set/edit/clear the note on TODAY's completion (the "+ note" chip).
+ * Recurring: notes the latest completion, which must be today's. One-off:
+ * notes the tasks row itself (no completion row exists), which must have
+ * been completed today. Anything else — including foreign tasks — is the
+ * same 404: there is nothing to note.
+ */
+export async function setCompletionNote(
+  userId: string,
+  taskId: string,
+  note: string | null,
+): Promise<{ note: string | null }> {
+  const tz = await userTz(userId);
+  const today = localDateFor(tz);
+  const task = await ownedTask(db, userId, taskId);
+  const nothingToNote = () => new HttpError(404, 'nothing_to_note', 'No completion today to note');
+
+  if (task.intervalHours !== null) {
+    const latest = await latestCompletion(db, taskId);
+    if (!latest || latest.localDate !== today) throw nothingToNote();
+    const [updated] = await db
+      .update(taskCompletions)
+      .set({ note })
+      .where(eq(taskCompletions.id, latest.id))
+      .returning({ note: taskCompletions.note });
+    return { note: updated!.note };
+  }
+
+  if (task.completedAt === null || localDateFor(tz, task.completedAt) !== today) {
+    throw nothingToNote();
+  }
+  const [updated] = await db
+    .update(tasks)
+    .set({ completionNote: note })
+    .where(eq(tasks.id, taskId))
+    .returning({ note: tasks.completionNote });
+  return { note: updated!.note };
 }

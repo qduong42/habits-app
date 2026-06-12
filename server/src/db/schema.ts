@@ -63,6 +63,7 @@ export const checkins = pgTable(
       .references(() => habits.id, { onDelete: 'cascade' }),
     userId: uuid('user_id').notNull().references(() => users.id),
     localDate: date('local_date').notNull(),
+    note: text('note'), // optional tick note ("climbing 1 hr"), set after the tick
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -93,6 +94,9 @@ export const tasks = pgTable(
     intervalHours: numeric('interval_hours', { mode: 'number' }), // set = recurring
     nextDue: timestamp('next_due', { withTimezone: true }), // recurring only
     completedAt: timestamp('completed_at', { withTimezone: true }), // one-off terminal
+    // One-off tick note (recurring notes live on the completion row); cleared
+    // by undo so a re-complete starts clean.
+    completionNote: text('completion_note'),
     remindAt: timestamp('remind_at', { withTimezone: true }), // one-off only, optional
     // Refire guard: stamped when the reminder push goes out (v1.2 spec §2);
     // cleared whenever remindAt changes.
@@ -115,6 +119,7 @@ export const taskCompletions = pgTable(
       .references(() => tasks.id, { onDelete: 'cascade' }),
     userId: uuid('user_id').notNull().references(() => users.id),
     localDate: date('local_date').notNull(),
+    note: text('note'), // optional tick note, set after the tick
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   // latest-completion-per-task lookups (listTasks DISTINCT ON, undo re-anchor)

@@ -95,3 +95,19 @@ export function useDeleteTask() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
   });
 }
+
+/** PUT /tasks/:id/completion-note — set/edit/clear today's tick note. */
+export function useSetCompletionNote() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, note }: { taskId: string; note: string }) =>
+      apiFetch<{ note: string | null }>(`/tasks/${taskId}/completion-note`, {
+        method: 'PUT',
+        body: JSON.stringify({ note }),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      void queryClient.invalidateQueries({ queryKey: ['history'] });
+    },
+  });
+}
