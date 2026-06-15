@@ -682,11 +682,18 @@ body {
 
 .interval-value {
   flex: 1;
-  min-width: 0;
+  /* Floor the width so the unit select can never collapse the number box;
+     larger/bolder so the value reads clearly. */
+  min-width: 3.5rem;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .interval-unit {
+  /* `.field select` sets width:100%; with flex:none that claims the whole row
+     and starves the number box to 0px. Pin it to its content width instead. */
   flex: none;
+  width: auto;
 }
 
 .due-date-input:focus,
