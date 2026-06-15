@@ -154,7 +154,7 @@ describe('POST /api/tasks', () => {
     });
   });
 
-  it('creates a recurring task with nextDue ≈ now + interval', async () => {
+  it('creates a recurring task due now (interval starts at the first completion)', async () => {
     const u = await makeUser();
     const before = Date.now();
     const res = await request(app)
@@ -166,11 +166,11 @@ describe('POST /api/tasks', () => {
       kind: 'recurring',
       intervalHours: 120,
       dueDate: null,
-      group: 'scheduled', // not due yet — default GET excludes it (asserted below)
+      group: 'today', // due immediately — appears on Today right away
     });
     const nextDue = Date.parse(res.body.nextDue);
-    expect(nextDue).toBeGreaterThanOrEqual(before + 120 * HOUR_MS - 5000);
-    expect(nextDue).toBeLessThanOrEqual(Date.now() + 120 * HOUR_MS + 5000);
+    expect(nextDue).toBeGreaterThanOrEqual(before - 5000);
+    expect(nextDue).toBeLessThanOrEqual(Date.now() + 5000);
   });
 
   it('rejects dueDate together with intervalHours', async () => {
@@ -217,6 +217,12 @@ describe('GET /api/tasks', () => {
       name: 'Recurring later',
       intervalHours: 120,
     });
+    // recurring tasks are due now on creation; push this one's nextDue out so
+    // it tests the not-yet-due (scheduled) path.
+    await db
+      .update(tasks)
+      .set({ nextDue: new Date(Date.now() + 120 * HOUR_MS) })
+      .where(eq(tasks.id, recurringNotDue.id));
     // a recurring task whose nextDue slipped to yesterday → overdue
     const recurringOverdue = await createTask(u.cookie, {
       name: 'Recurring overdue',
@@ -263,6 +269,11 @@ describe('GET /api/tasks?all=1 (Task 26: scheduled tasks reachable)', () => {
       name: 'Recurring later',
       intervalHours: 120,
     });
+    // recurring tasks are due now on creation; push nextDue out to exercise 'scheduled'.
+    await db
+      .update(tasks)
+      .set({ nextDue: new Date(Date.now() + 120 * HOUR_MS) })
+      .where(eq(tasks.id, recurringNotDue.id));
     // terminal: one-off completed on a past day → history, even with ?all=1
     const oldDone = await createTask(u.cookie, { name: 'Old done' });
     await complete(u.cookie, oldDone.id);
@@ -438,11 +449,12 @@ describe('DELETE /api/tasks/:id/complete (same-day undo)', () => {
     expect(Math.abs(row!.nextDue!.getTime() - expected1)).toBeLessThan(10_000);
     expect(r1.body.nextDue).toBeTruthy();
 
-    // undo the first completion too → nextDue falls back to createdAt + interval
+    // undo the first completion too → no completions left → back to due now
     const res2 = await undo(u.cookie, t.id);
     expect(res2.body).toMatchObject({ ok: true, xpLost: 5, xpTotal: 0 });
     const [row2] = await db.select().from(tasks).where(eq(tasks.id, t.id));
-    expect(row2!.nextDue!.getTime()).toBe(row2!.createdAt.getTime() + 12 * HOUR_MS);
+    expect(row2!.nextDue!.getTime()).toBeLessThanOrEqual(Date.now() + 5000);
+    expect(row2!.nextDue!.getTime()).toBeGreaterThan(Date.now() - 60_000);
     const completions = await db
       .select()
       .from(taskCompletions)

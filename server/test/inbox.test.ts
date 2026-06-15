@@ -437,12 +437,12 @@ describe('POST /api/inbox/:id/convert-task (Task 27)', () => {
       kind: 'recurring',
       intervalHours: 12,
       dueDate: null,
-      group: 'scheduled', // due one interval from creation
+      group: 'today', // due immediately on creation; interval starts at first tick
     });
-    // nextDue ≈ creation + 12h
+    // nextDue ≈ creation (due now)
     const nextDue = Date.parse(recurring.body.task.nextDue);
-    expect(nextDue).toBeGreaterThanOrEqual(before + 12 * 3_600_000);
-    expect(nextDue).toBeLessThanOrEqual(Date.now() + 12 * 3_600_000);
+    expect(nextDue).toBeGreaterThanOrEqual(before - 5000);
+    expect(nextDue).toBeLessThanOrEqual(Date.now() + 5000);
     expect(recurring.body.item).toMatchObject({
       status: 'converted',
       taskId: recurring.body.task.id,

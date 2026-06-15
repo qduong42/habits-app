@@ -261,8 +261,9 @@ export async function createTask(
       sourceUrl: input.sourceUrl ?? null,
       dueDate: recurring ? null : (input.dueDate ?? null),
       intervalHours: recurring ? input.intervalHours! : null,
-      // recurring: due one interval from creation (spec data model)
-      nextDue: recurring ? new Date(now.getTime() + input.intervalHours! * HOUR_MS) : null,
+      // recurring: due immediately on creation; the interval only starts
+      // counting from the first completion (completeTask sets now + interval).
+      nextDue: recurring ? now : null,
       remindAt: input.remindAt ? new Date(input.remindAt) : null,
     })
     .returning();
@@ -400,7 +401,8 @@ export async function undoCompleteTask(
     // Row lock FIRST (rewards.ts lockUserRow comment explains why).
     const user = await lockUserRow(tx, userId);
     const task = await ownedTask(tx, userId, taskId);
-    const today = localDateFor(user.timezone);
+    const now = new Date();
+    const today = localDateFor(user.timezone, now);
     const nothingToUndo = () => new HttpError(404, 'not_found', 'No completion today to undo');
 
     if (task.intervalHours !== null) {
@@ -408,11 +410,12 @@ export async function undoCompleteTask(
       if (!latest || latest.localDate !== today) throw nothingToUndo();
       await tx.delete(taskCompletions).where(eq(taskCompletions.id, latest.id));
       const previous = await latestCompletion(tx, taskId);
-      const anchor = previous?.createdAt ?? task.createdAt;
-      await tx
-        .update(tasks)
-        .set({ nextDue: new Date(anchor.getTime() + task.intervalHours * HOUR_MS) })
-        .where(eq(tasks.id, taskId));
+      // Re-anchor on the now-latest completion; with none left the task is
+      // back to its as-created state — due now (createTask's zero-completion rule).
+      const nextDue = previous
+        ? new Date(previous.createdAt.getTime() + task.intervalHours * HOUR_MS)
+        : now;
+      await tx.update(tasks).set({ nextDue }).where(eq(tasks.id, taskId));
     } else {
       if (task.completedAt === null || localDateFor(user.timezone, task.completedAt) !== today) {
         throw nothingToUndo(); // never completed, or completed on a past day (terminal)
