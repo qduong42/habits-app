@@ -50,13 +50,17 @@ export default function TaskForm({ task, onClose }: TaskFormProps) {
   const [remindTime, setRemindTime] = useState(initialRemind.time);
 
   // Interval prefill: whole-day intervals show as days (120h → 5 days).
+  // The raw typed text is the source of truth: binding a numeric state through
+  // valueAsNumber (blanking on NaN) wipes each keystroke on Android soft
+  // keyboards. We display the text verbatim and parse it for validation.
   const initialInterval = task?.intervalHours ?? 24;
   const wholeDays = initialInterval % 24 === 0;
-  const [intervalValue, setIntervalValue] = useState(
-    wholeDays ? initialInterval / 24 : initialInterval,
+  const [intervalText, setIntervalText] = useState(
+    String(wholeDays ? initialInterval / 24 : initialInterval),
   );
   const [intervalUnit, setIntervalUnit] = useState<IntervalUnit>(wholeDays ? 'days' : 'hours');
 
+  const intervalValue = intervalText.trim() === '' ? NaN : Number(intervalText);
   const intervalHours =
     intervalUnit === 'days' ? intervalValue * 24 : intervalValue;
   const intervalValid =
@@ -219,13 +223,11 @@ export default function TaskForm({ task, onClose }: TaskFormProps) {
             <span className="field-label">Repeat every</span>
             <div className="interval-row">
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 className="interval-value"
-                min={1}
-                max={intervalUnit === 'days' ? MAX_INTERVAL_HOURS / 24 : MAX_INTERVAL_HOURS}
-                step={1}
-                value={Number.isNaN(intervalValue) ? '' : intervalValue}
-                onChange={(e) => setIntervalValue(e.target.valueAsNumber)}
+                value={intervalText}
+                onChange={(e) => setIntervalText(e.target.value)}
                 aria-label="Interval"
                 required
               />

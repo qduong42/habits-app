@@ -36,7 +36,9 @@ export default function TriageCard({ items, paused, onCelebrate, onClose }: Tria
   const [index, setIndex] = useState(0);
   const [mode, setMode] = useState<Mode>('idle');
   const [dueDate, setDueDate] = useState('');
-  const [intervalValue, setIntervalValue] = useState(1);
+  // Raw typed text, not a numeric state: binding through valueAsNumber and
+  // blanking on NaN wipes keystrokes on Android soft keyboards.
+  const [intervalText, setIntervalText] = useState('1');
   const [intervalUnit, setIntervalUnit] = useState<IntervalUnit>('days');
   const [discardNote, setDiscardNote] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
@@ -45,6 +47,7 @@ export default function TriageCard({ items, paused, onCelebrate, onClose }: Tria
   const item = index < total ? items[index]! : null;
   const busy = convertTask.isPending || discard.isPending;
 
+  const intervalValue = intervalText.trim() === '' ? NaN : Number(intervalText);
   const intervalHours = intervalUnit === 'days' ? intervalValue * 24 : intervalValue;
   // Fractional values are fine — the server accepts any interval >= 1h, so
   // e.g. 1.5 days (36h) or 0.5 days (12h) are valid recurring intervals.
@@ -85,7 +88,7 @@ export default function TriageCard({ items, paused, onCelebrate, onClose }: Tria
   function advance() {
     setMode('idle');
     setDueDate('');
-    setIntervalValue(1);
+    setIntervalText('1');
     setIntervalUnit('days');
     setDiscardNote('');
     setActionError(null);
@@ -217,13 +220,11 @@ export default function TriageCard({ items, paused, onCelebrate, onClose }: Tria
               <div className="triage-inline">
                 <span className="triage-inline-label">every</span>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   className="interval-value"
-                  min={intervalUnit === 'days' ? 0.5 : 1}
-                  max={intervalUnit === 'days' ? MAX_INTERVAL_HOURS / 24 : MAX_INTERVAL_HOURS}
-                  step={intervalUnit === 'days' ? 0.5 : 1}
-                  value={Number.isNaN(intervalValue) ? '' : intervalValue}
-                  onChange={(e) => setIntervalValue(e.target.valueAsNumber)}
+                  value={intervalText}
+                  onChange={(e) => setIntervalText(e.target.value)}
                   aria-label="Interval"
                   autoFocus
                 />
