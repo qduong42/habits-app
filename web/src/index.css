@@ -221,6 +221,12 @@ body {
   margin: 0 0 12px;
 }
 
+.form-hint {
+  color: var(--text-muted);
+  font-size: 14px;
+  margin: 0 0 12px;
+}
+
 .btn-primary {
   width: 100%;
   padding: 12px;
